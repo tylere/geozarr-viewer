@@ -11,6 +11,7 @@ import type {
   ViewerStateUpdate,
 } from "../state/types";
 import { ColormapPicker, type ColormapOption } from "./ColormapPicker";
+import { RangeSlider } from "./RangeSlider";
 
 const BASEMAP_OPTIONS: { value: Basemap; label: string }[] = [
   { value: "auto", label: "Auto (system)" },
@@ -318,6 +319,24 @@ function RescaleEditor({
       ]
     : null;
   const value = state.rescale ?? fallback;
+
+  // Slider track bounds: the data's full range (from autoStats), widened to
+  // include the current handles when they sit outside it (e.g. a shared link
+  // with a rescale beyond the data range). With no stats, pad around the value
+  // so the handles have room to move.
+  let bounds: [number, number] | null = null;
+  if (value) {
+    const [lo, hi] = value;
+    const pad = Math.abs(hi - lo) || Math.max(Math.abs(lo), Math.abs(hi), 1);
+    let bmin = auto ? Math.min(auto.min, lo) : lo - pad;
+    let bmax = auto ? Math.max(auto.max, hi) : hi + pad;
+    if (bmin >= bmax) {
+      bmin = lo - pad;
+      bmax = hi + pad;
+    }
+    bounds = [bmin, bmax];
+  }
+
   return (
     <div style={{ display: "grid", gap: 4 }}>
       <span
@@ -349,34 +368,25 @@ function RescaleEditor({
           </span>
         )}
       </span>
-      <div style={{ display: "grid", gap: 4, gridTemplateColumns: "1fr 1fr" }}>
-        <input
-          type="number"
-          aria-label="rescale-min"
-          step="any"
-          value={value ? value[0] : ""}
-          placeholder="min"
-          onChange={(e) => {
-            const lo = Number(e.target.value);
-            const hi = value ? value[1] : Number(e.target.value) + 1;
-            if (Number.isFinite(lo))
-              update({ rescale: [lo, Number.isFinite(hi) ? hi : lo + 1] });
-          }}
+      {value && bounds ? (
+        <RangeSlider
+          min={bounds[0]}
+          max={bounds[1]}
+          value={value}
+          onCommit={(next) => update({ rescale: next })}
         />
-        <input
-          type="number"
-          aria-label="rescale-max"
-          step="any"
-          value={value ? value[1] : ""}
-          placeholder="max"
-          onChange={(e) => {
-            const hi = Number(e.target.value);
-            const lo = value ? value[0] : Number(e.target.value) - 1;
-            if (Number.isFinite(hi))
-              update({ rescale: [Number.isFinite(lo) ? lo : hi - 1, hi] });
+      ) : (
+        <span
+          className="mono"
+          style={{
+            color: "var(--text-muted)",
+            fontSize: 11,
+            textTransform: "none",
           }}
-        />
-      </div>
+        >
+          Adjust once data statistics load.
+        </span>
+      )}
     </div>
   );
 }

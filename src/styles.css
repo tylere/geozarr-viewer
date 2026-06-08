@@ -119,6 +119,70 @@ input[type="range"] {
   width: 100%;
 }
 
+/* Dual-handle range slider (see RangeSlider.tsx): two native range inputs
+   stacked over a shared track. The inputs themselves ignore pointer events so
+   the track/fill show through; only the thumbs are interactive. */
+.range-slider {
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+.range-slider-track,
+.range-slider-fill {
+  position: absolute;
+  height: 4px;
+  border-radius: 2px;
+}
+.range-slider-track {
+  left: 0;
+  right: 0;
+  background: var(--border);
+}
+.range-slider-fill {
+  background: var(--accent);
+}
+.range-slider-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-slider-input::-webkit-slider-runnable-track {
+  background: none;
+}
+.range-slider-input::-moz-range-track {
+  background: none;
+}
+.range-slider-input::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+
 a {
   color: var(--accent);
 }
