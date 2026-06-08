@@ -37,8 +37,13 @@ const COLORMAP_OPTIONS: ColormapOption[] = COLORMAP_NAMES.map((name) => ({
 type Props = {
   state: ViewerState;
   update: (patch: ViewerStateUpdate) => void;
-  /** Profile-supplied controls block (variable picker, dim sliders, etc.). */
-  profileSlot: ReactNode;
+  /** Profile controls that refetch chunks on change (variable, fetched dims). */
+  profileFetchSlot: ReactNode;
+  /** Profile controls backed by a preloaded texture array — instant, no
+   * refetch (e.g. ECMWF lead_time). `null` when the profile has none. */
+  profileInstantSlot: ReactNode;
+  /** Profile display-only controls (e.g. AEF rescale). `null` when none. */
+  profileStyleSlot: ReactNode;
   /** Profile name shown in the panel title. */
   profileLabel: string | null;
   /** Whether to show single-band colormap + rescale controls. */
@@ -52,7 +57,9 @@ type Props = {
 export function ControlsPanel({
   state,
   update,
-  profileSlot,
+  profileFetchSlot,
+  profileInstantSlot,
+  profileStyleSlot,
   profileLabel,
   showSingleBandControls,
   autoStats,
@@ -98,19 +105,39 @@ export function ControlsPanel({
         </summary>
 
         <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-          {profileSlot && <div className="section">{profileSlot}</div>}
-
           <div className="section">
-            <span className="section-title">Location</span>
+            <span className="section-title">View</span>
             <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
               <LocationPicker state={state} update={update} onFlyTo={onFlyTo} />
             </div>
           </div>
 
-          {showSingleBandControls && (
-            <div className="section">
-              <span className="section-title">Render</span>
-              <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
+          <ControlGroup
+            variant="fetch"
+            title="Data · re-reads on change"
+            caption="Loads new chunks from the store — may be slow for large chunks."
+          >
+            {profileFetchSlot}
+          </ControlGroup>
+
+          {profileInstantSlot && (
+            <ControlGroup
+              variant="instant"
+              title="Data · instant"
+              caption="Pre-loaded into GPU memory — scrubs instantly, no fetch."
+            >
+              {profileInstantSlot}
+            </ControlGroup>
+          )}
+
+          <ControlGroup
+            variant="style"
+            title="Styling"
+            caption="Display only — applies immediately."
+          >
+            {profileStyleSlot}
+            {showSingleBandControls && (
+              <>
                 <label style={{ display: "grid", gap: 4 }}>
                   <span className="field-label">Colormap</span>
                   <ColormapPicker
@@ -160,52 +187,75 @@ export function ControlsPanel({
                     onChange={(e) => update({ gamma: Number(e.target.value) })}
                   />
                 </label>
-              </div>
-            </div>
-          )}
-
-          <div className="section">
-            <span className="section-title">Chassis</span>
-            <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
-              <label style={{ display: "grid", gap: 4 }}>
-                <span
-                  className="field-label"
-                  style={{ display: "flex", justifyContent: "space-between" }}
-                >
-                  <span>Opacity</span>
-                  <span className="mono" style={{ textTransform: "none" }}>
-                    {Math.round(state.opacity * 100)}%
-                  </span>
+              </>
+            )}
+            <label style={{ display: "grid", gap: 4 }}>
+              <span
+                className="field-label"
+                style={{ display: "flex", justifyContent: "space-between" }}
+              >
+                <span>Opacity</span>
+                <span className="mono" style={{ textTransform: "none" }}>
+                  {Math.round(state.opacity * 100)}%
                 </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={state.opacity}
-                  onChange={(e) => update({ opacity: Number(e.target.value) })}
-                />
-              </label>
-              <label style={{ display: "grid", gap: 4 }}>
-                <span className="field-label">Basemap</span>
-                <select
-                  value={state.basemap}
-                  onChange={(e) =>
-                    update({ basemap: e.target.value as Basemap })
-                  }
-                >
-                  {BASEMAP_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={state.opacity}
+                onChange={(e) => update({ opacity: Number(e.target.value) })}
+              />
+            </label>
+            <label style={{ display: "grid", gap: 4 }}>
+              <span className="field-label">Basemap</span>
+              <select
+                value={state.basemap}
+                onChange={(e) => update({ basemap: e.target.value as Basemap })}
+              >
+                {BASEMAP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </ControlGroup>
         </div>
       </details>
     </div>
+  );
+}
+
+const GROUP_GLYPH: Record<"fetch" | "instant" | "style", string> = {
+  fetch: "⟳",
+  instant: "⚡",
+  style: "🎨",
+};
+
+/** A styled, captioned box grouping controls by cost/kind. The accent colour
+ * and glyph are driven by `variant` (see `.control-group--*` in styles.css). */
+function ControlGroup({
+  variant,
+  title,
+  caption,
+  children,
+}: {
+  variant: "fetch" | "instant" | "style";
+  title: string;
+  caption: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`control-group control-group--${variant}`}>
+      <span className="control-group__title">
+        <span aria-hidden="true">{GROUP_GLYPH[variant]}</span>
+        {title}
+      </span>
+      <span className="control-group__caption">{caption}</span>
+      <div style={{ display: "grid", gap: 10, marginTop: 8 }}>{children}</div>
+    </section>
   );
 }
 

@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { detectProfile, normalizeStoreUrl } from "../source";
 
 describe("detectProfile", () => {
-  it("matches AEF by URL pattern", () => {
-    const p = detectProfile("https://data.source.coop/tge-labs/aef-mosaic", null);
-    expect(p?.id).toBe("aef");
-  });
-
-  it("returns null for unmatched URLs", () => {
-    const p = detectProfile("https://example.com/random.zarr", null);
-    expect(p).toBeNull();
+  it("defaults any store to scalar-grid", () => {
+    expect(
+      detectProfile(
+        "https://data.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr",
+        null,
+      )?.id,
+    ).toBe("scalar-grid");
+    expect(
+      detectProfile("https://example.com/random.zarr", null)?.id,
+    ).toBe("scalar-grid");
   });
 
   it("returns null for null url", () => {
@@ -17,16 +19,16 @@ describe("detectProfile", () => {
   });
 
   it("honors explicit ?p= override", () => {
-    const p = detectProfile("https://example.com/random.zarr", "aef");
-    expect(p?.id).toBe("aef");
-  });
-
-  it("ignores invalid explicit override", () => {
     const p = detectProfile(
       "https://data.source.coop/tge-labs/aef-mosaic",
-      "bogus",
+      "band-composite",
     );
-    expect(p?.id).toBe("aef");
+    expect(p?.id).toBe("band-composite");
+  });
+
+  it("falls back to default for an invalid explicit override", () => {
+    const p = detectProfile("https://example.com/random.zarr", "bogus");
+    expect(p?.id).toBe("scalar-grid");
   });
 });
 

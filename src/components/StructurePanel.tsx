@@ -1,5 +1,5 @@
 import type * as zarr from "zarrita";
-import { asConsolidated } from "../zarr/load-zarr";
+import { asConsolidated, asIcechunk, type IcechunkInfo } from "../zarr/load-zarr";
 import type {
   CodecSummary,
   GeoZarrMetadataSource,
@@ -59,6 +59,7 @@ export function StructurePanel({
   codecs,
 }: Props) {
   const isOpen = state.panelStructure === "open";
+  const icechunk = asIcechunk(group.store);
   const consolidated = asConsolidated(group.store) !== null;
   return (
     <div
@@ -103,6 +104,7 @@ export function StructurePanel({
             url={state.url}
             zarrVersion={structure.zarrVersion}
             consolidated={consolidated}
+            icechunk={icechunk}
           />
           <VariableSection structure={structure} node={node} />
           <ShardingSection codecs={codecs} />
@@ -118,10 +120,12 @@ function StoreSection({
   url,
   zarrVersion,
   consolidated,
+  icechunk,
 }: {
   url: string | null;
   zarrVersion: "v2" | "v3";
   consolidated: boolean;
+  icechunk: IcechunkInfo | null;
 }) {
   return (
     <div className="section">
@@ -132,19 +136,77 @@ function StoreSection({
         </KV>
         <KV
           label="Format"
-          info="The on-disk Zarr format version. v2 uses one metadata file per node (.zarray / .zgroup / .zattrs); v3 stores them in a single zarr.json per node and adds first-class sharding for many-small-chunk stores. This viewer opens every store with zarr.open.v3 today, so all current examples are v3."
+          info={
+            icechunk
+              ? "Icechunk is a transactional storage format layered over Zarr v3: a snapshot pins every array's metadata and chunk locations, so the data you see is one immutable version of the repo. The viewer reads it with icechunk-js instead of plain HTTP."
+              : "The on-disk Zarr format version. v2 uses one metadata file per node (.zarray / .zgroup / .zattrs); v3 stores them in a single zarr.json per node and adds first-class sharding for many-small-chunk stores. This viewer opens every store with zarr.open.v3 today, so all current examples are v3."
+          }
         >
-          Zarr {zarrVersion}
+          {icechunk ? `Icechunk ${icechunk.specVersion} · Zarr ${zarrVersion}` : `Zarr ${zarrVersion}`}
         </KV>
-        <KV
-          label="Consolidated"
-          info="Whether the store ships a pre-built 'table of contents' that lists every node's metadata in one file. With consolidated metadata, the client opens sub-arrays without an extra HTTP request — important for stores with many variables. Without it, every zarr.open() of a sub-array is its own round trip."
-        >
-          <YesNoPill value={consolidated} />
-        </KV>
+        {icechunk ? (
+          <IcechunkRows icechunk={icechunk} />
+        ) : (
+          <KV
+            label="Consolidated"
+            info="Whether the store ships a pre-built 'table of contents' that lists every node's metadata in one file. With consolidated metadata, the client opens sub-arrays without an extra HTTP request — important for stores with many variables. Without it, every zarr.open() of a sub-array is its own round trip."
+          >
+            <YesNoPill value={consolidated} />
+          </KV>
+        )}
       </dl>
     </div>
   );
+}
+
+function IcechunkRows({ icechunk }: { icechunk: IcechunkInfo }) {
+  // Snapshot IDs are 20-char Base32; show a short prefix with the full id on
+  // hover, plus the commit message and flush time as muted sub-lines.
+  const shortId = icechunk.snapshotId.slice(0, 8);
+  return (
+    <>
+      <KV
+        label="Branch"
+        info="The Icechunk branch the viewer checked out (always the latest snapshot on that branch). The viewer reads the default branch; switching branches isn't supported here."
+      >
+        {icechunk.branch}
+      </KV>
+      <KV
+        label="Snapshot"
+        info={`Immutable snapshot ${icechunk.snapshotId} — the exact repo version being read.`}
+      >
+        <div style={{ display: "grid", gap: 2 }}>
+          <span className="mono" title={icechunk.snapshotId}>
+            {shortId}…
+          </span>
+          {icechunk.message && (
+            <span className="meta-muted" style={{ fontSize: 11, lineHeight: 1.4 }}>
+              {formatJson(icechunk.message)}
+            </span>
+          )}
+          <span className="meta-muted" style={{ fontSize: 11 }}>
+            {formatFlushedAt(icechunk.flushedAt)}
+          </span>
+        </div>
+      </KV>
+      <KV
+        label="Branches"
+        info="Other branches in the repo. Empty for v1 Icechunk stores read over plain HTTP — the proxy can't list refs, so only the checked-out branch is known."
+      >
+        {icechunk.branches.length > 0 ? icechunk.branches.join(", ") : "(none listed)"}
+      </KV>
+      <KV label="Tags">
+        {icechunk.tags.length > 0 ? icechunk.tags.join(", ") : "(none listed)"}
+      </KV>
+    </>
+  );
+}
+
+function formatFlushedAt(d: Date): string {
+  const t = d.getTime();
+  if (!Number.isFinite(t)) return "—";
+  // Trim milliseconds: "2026-01-20T11:28:33Z".
+  return d.toISOString().replace(/\.\d+Z$/, "Z");
 }
 
 function YesNoPill({ value }: { value: boolean }) {
@@ -193,6 +255,12 @@ function VariableSection({
         </KV>
         <KV label="Chunks">
           {chunks ? formatShape(chunks, dimensionNames) : "—"}
+        </KV>
+        <KV
+          label="Chunk size"
+          info="Estimated uncompressed size of one chunk = product of the chunk dimensions × the dtype's byte width. This is the data a client must decode (and hold in memory) to read any element in the chunk; the bytes actually stored/transferred are smaller after compression."
+        >
+          {formatChunkBytes(chunks, dtype) ?? "—"}
         </KV>
         <KV label="Dtype">{dtype ?? "—"}</KV>
         <KV label="Fill value">{fillValue ?? "—"}</KV>
@@ -393,6 +461,42 @@ function formatFillValue(v: unknown): string {
   if (typeof v === "bigint") return v.toString();
   if (typeof v === "number" && Number.isNaN(v)) return "NaN";
   return String(v);
+}
+
+/** Byte width of a zarrita dtype string (e.g. "float16" → 2). The trailing
+ * number is the bit width for the float/int/uint families; `bool` is 1. */
+function dtypeBytes(dtype: string): number | null {
+  if (dtype === "bool") return 1;
+  const m = /^(?:float|int|uint)(\d+)$/.exec(dtype);
+  if (!m) return null;
+  return Number(m[1]) / 8;
+}
+
+/** Estimated uncompressed bytes of one chunk = ∏(chunk dims) × dtype width.
+ * Returns null when the dtype byte width is unknown. */
+function formatChunkBytes(
+  chunks: readonly number[] | null,
+  dtype: string | null,
+): string | null {
+  if (!chunks || !dtype) return null;
+  const bytes = dtypeBytes(dtype);
+  if (bytes === null) return null;
+  const elems = chunks.reduce((a, b) => a * b, 1);
+  return formatBytes(elems * bytes);
+}
+
+/** Human-readable byte size: KB / MB / GB, ~3 significant figures. */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  const digits = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return `${v.toFixed(digits)} ${units[i]}`;
 }
 
 function formatJson(v: unknown): string {

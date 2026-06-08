@@ -12,7 +12,19 @@ import type { StructureProfileSummary } from "./structure";
 export type ProfileBaseContext = {
   url: string;
   group: zarr.Group<zarr.Readable>;
+  /** Per-store lowest render zoom (e.g. derived from grid resolution). When
+   * set, it overrides the profile's static `minRenderZoom` for the zoom hint. */
+  minRenderZoom?: number;
 };
+
+/** Which bucket of controls to render. The Options panel groups controls by
+ * cost/kind and asks each profile for one bucket at a time:
+ *   - "fetch": data selectors that refetch chunks (variable, fetched dims)
+ *   - "instant": data selectors backed by a preloaded texture array, scrubbed
+ *     as a shader uniform (e.g. ECMWF lead_time, generic textureDim)
+ *   - "styling": display-only knobs the profile owns (e.g. AEF rescale)
+ * A profile returns `null` for buckets it has no controls in. */
+export type ControlGroup = "fetch" | "instant" | "styling";
 
 export type ProfileControlsProps<Ctx, S> = {
   ctx: Ctx;
@@ -22,6 +34,8 @@ export type ProfileControlsProps<Ctx, S> = {
   chassisUpdate: (patch: Partial<ViewerState>) => void;
   autoStats: AutoStats | null;
   onFlyTo: (longitude: number, latitude: number, zoom: number) => void;
+  /** Bucket to render. Omitted = render every control (back-compat). */
+  group?: ControlGroup;
 };
 
 export type BuildLayerArgs<Ctx, S> = {
@@ -47,7 +61,6 @@ export type ZarrProfile<
 > = {
   id: string;
   label: string;
-  matches: (url: string) => boolean;
   prepare: (url: string, signal: AbortSignal) => Promise<Ctx>;
   initialState: (ctx: Ctx) => S;
   parseUrlParams: (p: URLSearchParams) => Partial<S>;
