@@ -11,7 +11,7 @@ import {
   makeTextureArrayTileLoader,
   type TextureArrayTileData,
 } from "../../../render/texture-array-pipeline";
-import { spatialTileSize } from "../../chunk-size";
+import { bytesPerElement, spatialTileSize } from "../../chunk-size";
 import { asConsolidated, openV3Group } from "../../load-zarr";
 import type { ZarrProfile } from "../../profile";
 import { buildDimLabel } from "./cf-coords";
@@ -257,13 +257,56 @@ function readStoreNativeGrid(
 
 const EARTH_CIRCUMFERENCE_M = 40_075_017;
 
-/** Lowest web-mercator zoom to render at, from the grid's pixel size: two
- * levels below the data's native zoom (where 1 data px ≈ 1 tile px). High-res
- * grids (FTW ~10 m → ~z12) gate; coarse grids (≥0.2° → ~z0–1) don't. */
-function deriveMinZoom(metersPerPx: number): number {
+/** Per-axis screen px the render-zoom budget is sized for. 256 = one tile;
+ * matches the legacy `nativeZoom − 2` cushion this gate replaces, so typical
+ * stores reproduce their old min-zoom. */
+const REF_AXIS_PX = 256;
+/** Fetch budget for the lowest render zoom: a viewport fill must stay within
+ * BOTH a byte budget (resolution × dtype — the bytes a zoom-out actually pulls)
+ * AND a request-count budget (chunks the viewport straddles). Tuned so typical
+ * stores land on the old resolution-only floor (FTW ~z12, 0.25° ~z1). */
+const BUDGET_BYTES = 8_000_000;
+const BUDGET_CHUNKS = 16;
+const MAX_RENDER_ZOOM = 24;
+
+/** Lowest web-mercator zoom to render at, modelling the data a zoom-out pulls.
+ * The deck.gl-zarr layer reads single-resolution stores at full resolution,
+ * one chunk per tile, fetching every chunk the viewport straddles — so zooming
+ * out multiplies both bytes (more data pixels) and requests (more chunks).
+ *
+ * For each candidate zoom we estimate, over a {@link REF_AXIS_PX}-px reference
+ * tile, the data pixels covered (`d`), the bytes (`d² · bytesPerEl` — the
+ * zoom-fixable, resolution/dtype-driven cost), and the chunk requests
+ * (`⌈d/chunkW⌉·⌈d/chunkH⌉` — the chunk-driven overfetch). The gate is the
+ * lowest zoom satisfying both budgets.
+ *
+ * Bytes are deliberately the *pure viewport* (not rounded up to whole chunks):
+ * a store with one giant chunk pulls that whole chunk at any zoom, so zooming
+ * can't reduce it — gating such a store harder would only hide data at equal
+ * cost. It therefore renders at its resolution floor (the byte/request terms
+ * collapse to resolution-only when one chunk covers the viewport). Chunk size
+ * bites where zoom can fix it: tiny chunks blow the request budget and gate up.
+ *
+ * Examples: FTW ~10 m/256-chunk/f32 → ~z12; 0.25° → ~z1; the same 10 m grid
+ * with 64-px chunks → ~z14 (request-bound); int8 gates ~1 level looser than
+ * float32 when bytes bind. */
+export function deriveMinZoom(
+  metersPerPx: number,
+  chunkW: number,
+  chunkH: number,
+  bytesPerEl: number,
+): number {
   if (!(metersPerPx > 0)) return 0;
+  const cw = chunkW > 0 ? chunkW : REF_AXIS_PX;
+  const ch = chunkH > 0 ? chunkH : REF_AXIS_PX;
   const nativeZoom = Math.log2(EARTH_CIRCUMFERENCE_M / (metersPerPx * 256));
-  return Math.max(0, Math.ceil(nativeZoom) - 2);
+  for (let z = 0; z <= MAX_RENDER_ZOOM; z++) {
+    const d = REF_AXIS_PX * 2 ** (nativeZoom - z); // data px per axis
+    const requests = Math.ceil(d / cw) * Math.ceil(d / ch);
+    const bytes = d * d * bytesPerEl;
+    if (bytes <= BUDGET_BYTES && requests <= BUDGET_CHUNKS) return z;
+  }
+  return MAX_RENDER_ZOOM;
 }
 
 function pickDefaultVariable(variables: ScalarGridVariable[]): string {
@@ -325,7 +368,15 @@ export const scalarGridProfile: ZarrProfile<ScalarGridState, ScalarGridContext> 
     const metersPerPx = /4326/.test(projCode)
       ? degPerPxLon * (EARTH_CIRCUMFERENCE_M / 360)
       : degPerPxLon; // projected transforms are already in metres
-    const minRenderZoom = deriveMinZoom(metersPerPx);
+    const nd = firstArr.chunks.length;
+    const chunkH = firstArr.chunks[nd - 2] ?? REF_AXIS_PX;
+    const chunkW = firstArr.chunks[nd - 1] ?? REF_AXIS_PX;
+    const minRenderZoom = deriveMinZoom(
+      metersPerPx,
+      chunkW,
+      chunkH,
+      bytesPerElement(firstArr.dtype),
+    );
 
     // CF labels for every non-spatial dim (dates / durations / index).
     const dimSize = new Map<string, number>();

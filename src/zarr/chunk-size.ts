@@ -20,3 +20,14 @@ export function spatialTileSize(
   if (typeof cy !== "number" || typeof cx !== "number") return 256;
   return Math.min(cy, cx);
 }
+
+/** Bytes per element for a zarrita dtype string ("float32" → 4, "int8" → 1).
+ * Used to estimate per-viewport fetch volume for the render-zoom gate. Matches
+ * the trailing bit-count (robust across zarrita's dtype spellings); sub-byte
+ * (e.g. "bool") and unknown dtypes fall back to 4 (float32-equivalent). */
+export function bytesPerElement(dtype: string): number {
+  const m = /(\d+)$/.exec(dtype);
+  if (!m) return 4;
+  const bits = Number(m[1]);
+  return bits >= 8 ? bits / 8 : 4;
+}
