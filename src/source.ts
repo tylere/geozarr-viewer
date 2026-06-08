@@ -1,9 +1,10 @@
 import type { AnyZarrProfile } from "./zarr/profile";
-import { getProfile, PROFILES } from "./zarr/profiles";
+import { DEFAULT_PROFILE, getProfile } from "./zarr/profiles";
 
-/** Pick the active profile for a (url, explicit-override) pair. Explicit
- * `?p=` wins; otherwise the first profile whose `matches(url)` returns
- * true; null if neither resolves. */
+/** Pick the active profile for a (url, explicit-override) pair. Profiles are
+ * capability-based (not URL-matched), so an explicit `?p=` id wins; otherwise
+ * any store with a `url` falls back to the default `scalar-grid` profile
+ * (single-band → colormap). `null` only when there's no url. */
 export function detectProfile(
   url: string | null,
   explicit: string | null,
@@ -13,7 +14,7 @@ export function detectProfile(
     if (found) return found;
   }
   if (!url) return null;
-  return PROFILES.find((p) => p.matches(url)) ?? null;
+  return DEFAULT_PROFILE;
 }
 
 /** Normalize a pasted store URL.

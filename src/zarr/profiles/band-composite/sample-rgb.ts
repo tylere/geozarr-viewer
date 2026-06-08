@@ -1,7 +1,7 @@
 import type { Texture } from "@luma.gl/core";
 
-/** Props for the {@link SampleAefRgb} shader module. */
-export type SampleAefRgbProps = {
+/** Props for the {@link SampleBandCompositeRgb} shader module. */
+export type SampleBandCompositeRgbProps = {
   /** r8sint Texture2DArray; one layer per AEF band (depth = 64). */
   dataTex: Texture;
   /** Layer index sampled for the red channel (0..63). */
@@ -16,7 +16,7 @@ export type SampleAefRgbProps = {
   rescaleMax: number;
 };
 
-const MODULE_NAME = "sampleAefRgb";
+const MODULE_NAME = "sampleBandCompositeRgb";
 
 /**
  * Shader module that samples three layers of an `r8sint` Texture2DArray,
@@ -27,7 +27,7 @@ const MODULE_NAME = "sampleAefRgb";
  *
  * Ported verbatim from the upstream `aef-mosaic` example.
  */
-export const SampleAefRgb = {
+export const SampleBandCompositeRgb = {
   name: MODULE_NAME,
   fs: `\
 uniform ${MODULE_NAME}Uniforms {
@@ -43,24 +43,24 @@ uniform ${MODULE_NAME}Uniforms {
 precision highp isampler2DArray;
 uniform highp isampler2DArray dataTex;
 
-int sampleAefRgb_fetchBand(vec2 uv, int band) {
+int sampleBandCompositeRgb_fetchBand(vec2 uv, int band) {
   return texture(dataTex, vec3(uv, float(band))).r;
 }
 
-float sampleAefRgb_dequant(int v) {
+float sampleBandCompositeRgb_dequant(int v) {
   float f = float(v) / 127.5;
   return f * f * sign(f);
 }
 `,
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
-      int ri = sampleAefRgb_fetchBand(geometry.uv, ${MODULE_NAME}.rBandIdx);
-      int gi = sampleAefRgb_fetchBand(geometry.uv, ${MODULE_NAME}.gBandIdx);
-      int bi = sampleAefRgb_fetchBand(geometry.uv, ${MODULE_NAME}.bBandIdx);
+      int ri = sampleBandCompositeRgb_fetchBand(geometry.uv, ${MODULE_NAME}.rBandIdx);
+      int gi = sampleBandCompositeRgb_fetchBand(geometry.uv, ${MODULE_NAME}.gBandIdx);
+      int bi = sampleBandCompositeRgb_fetchBand(geometry.uv, ${MODULE_NAME}.bBandIdx);
       if (ri == -128 || gi == -128 || bi == -128) discard;
       vec3 rgb = vec3(
-        sampleAefRgb_dequant(ri),
-        sampleAefRgb_dequant(gi),
-        sampleAefRgb_dequant(bi)
+        sampleBandCompositeRgb_dequant(ri),
+        sampleBandCompositeRgb_dequant(gi),
+        sampleBandCompositeRgb_dequant(bi)
       );
       float invSpan = 1.0 / (${MODULE_NAME}.rescaleMax - ${MODULE_NAME}.rescaleMin);
       rgb = clamp((rgb - ${MODULE_NAME}.rescaleMin) * invSpan, 0.0, 1.0);
@@ -74,7 +74,7 @@ float sampleAefRgb_dequant(int v) {
     rescaleMin: "f32",
     rescaleMax: "f32",
   },
-  getUniforms: (props: Partial<SampleAefRgbProps>) => ({
+  getUniforms: (props: Partial<SampleBandCompositeRgbProps>) => ({
     rBandIdx: props.rBandIdx ?? 0,
     gBandIdx: props.gBandIdx ?? 1,
     bBandIdx: props.bBandIdx ?? 2,

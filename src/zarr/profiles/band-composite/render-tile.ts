@@ -1,8 +1,8 @@
 import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
-import { SampleAefRgb } from "./sample-aef-rgb";
-import type { AefTileData } from "./tile-loader";
+import { SampleBandCompositeRgb } from "./sample-rgb";
+import type { BandCompositeTileData } from "./tile-loader";
 
-export type AefRenderTileArgs = {
+export type BandCompositeRenderTileArgs = {
   rBandIdx: number;
   gBandIdx: number;
   bBandIdx: number;
@@ -12,13 +12,13 @@ export type AefRenderTileArgs = {
 
 /** Build a `renderTile` closure for AEF. The shader module owns
  * dequantization + RGB band picks + linear rescale + nodata discard. */
-export function makeAefRenderTile(args: AefRenderTileArgs) {
+export function makeRgbRenderTile(args: BandCompositeRenderTileArgs) {
   const { rBandIdx, gBandIdx, bBandIdx, rescaleMin, rescaleMax } = args;
-  return function renderTile(data: AefTileData): RenderTileResult {
+  return function renderTile(data: BandCompositeTileData): RenderTileResult {
     return {
       renderPipeline: [
         {
-          module: SampleAefRgb,
+          module: SampleBandCompositeRgb,
           props: {
             dataTex: data.texture,
             rBandIdx,

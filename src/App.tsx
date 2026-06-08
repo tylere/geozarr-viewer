@@ -31,6 +31,7 @@ import {
   buildExampleLoadPatch,
   type ExampleLoadRequest,
 } from "./state/load-example";
+import { mergeProfileState } from "./state/merge-profile-state";
 import { useViewerState } from "./state/useViewerState";
 import type { AnyZarrProfile, ProfileBaseContext } from "./zarr/profile";
 import {
@@ -55,6 +56,7 @@ function DeckGLOverlay(
   overlay.setProps(props);
   return null;
 }
+
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -98,7 +100,7 @@ export default function App() {
     if (!profile || !profileCtx) return null;
     const base = profile.initialState(profileCtx);
     const overrides = profile.parseUrlParams(params);
-    return { ...base, ...overrides };
+    return mergeProfileState(base, overrides);
   }, [profile, profileCtx, params]);
 
   const updateProfileState = useCallback(
@@ -436,7 +438,7 @@ export default function App() {
           showSingleBandControls={showSingleBandControls}
           autoStats={autoStats}
           onFlyTo={handleFlyTo}
-          profileSlot={profile.Controls({
+          profileFetchSlot={profile.Controls({
             ctx: profileCtx,
             state: profileState,
             update: updateProfileState,
@@ -444,6 +446,27 @@ export default function App() {
             chassisUpdate: update,
             autoStats,
             onFlyTo: handleFlyTo,
+            group: "fetch",
+          })}
+          profileInstantSlot={profile.Controls({
+            ctx: profileCtx,
+            state: profileState,
+            update: updateProfileState,
+            chassisState: state,
+            chassisUpdate: update,
+            autoStats,
+            onFlyTo: handleFlyTo,
+            group: "instant",
+          })}
+          profileStyleSlot={profile.Controls({
+            ctx: profileCtx,
+            state: profileState,
+            update: updateProfileState,
+            chassisState: state,
+            chassisUpdate: update,
+            autoStats,
+            onFlyTo: handleFlyTo,
+            group: "styling",
           })}
         />
       )}
@@ -459,12 +482,19 @@ export default function App() {
         />
       )}
 
-      {mapSettled &&
-        profileCtx != null &&
-        profile?.minRenderZoom != null &&
-        viewZoom < profile.minRenderZoom && (
-          <ZoomHint current={viewZoom} threshold={profile.minRenderZoom} />
-        )}
+      {(() => {
+        // Per-store min-zoom (scalar-grid derives it from resolution) overrides
+        // the profile's static value for the zoom-in hint.
+        const minZoom = profileCtx?.minRenderZoom ?? profile?.minRenderZoom;
+        return (
+          mapSettled &&
+          profileCtx != null &&
+          minZoom != null &&
+          viewZoom < minZoom && (
+            <ZoomHint current={viewZoom} threshold={minZoom} />
+          )
+        );
+      })()}
 
       <Toast message={error} onDismiss={() => setError(null)} />
 

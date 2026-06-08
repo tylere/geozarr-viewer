@@ -226,3 +226,51 @@ details.section > div.section-body {
   gap: 10px;
   margin-top: 8px;
 }
+
+/* Options-panel control groups: a captioned box whose left-border accent +
+ * glyph signal whether changing a control refetches data, is an instant data
+ * scrub, or is display-only styling. Accent colours match the Structure
+ * panel's status pills. */
+.control-group {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--group-accent, var(--border-strong));
+  background: var(--surface-muted);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.control-group__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--group-accent, var(--text));
+}
+.control-group__caption {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+.control-group--fetch {
+  --group-accent: #a06a10;
+}
+.control-group--instant {
+  --group-accent: #1f6b3a;
+}
+.control-group--style {
+  --group-accent: #404488;
+}
+/* Brighten accents so the title text stays legible on the dark surface. */
+.theme-dark .control-group--fetch {
+  --group-accent: #d99a2b;
+}
+.theme-dark .control-group--instant {
+  --group-accent: #4fae74;
+}
+.theme-dark .control-group--style {
+  --group-accent: #8a8fde;
+}

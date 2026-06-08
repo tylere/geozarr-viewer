@@ -1,13 +1,42 @@
 import type { ProfileControlsProps } from "../../profile";
-import { NUM_BANDS, YEAR_ORIGIN } from "./constants";
-import type { AefContext, AefState } from "./types";
+import { YEAR_ORIGIN } from "./constants";
+import type { BandCompositeContext, BandCompositeState } from "./types";
 
-export function AefControls({
+export function BandCompositeControls({
   ctx,
   state,
   update,
-}: ProfileControlsProps<AefContext, AefState>) {
+  group,
+}: ProfileControlsProps<BandCompositeContext, BandCompositeState>) {
   const labels = ctx.bandLabels;
+
+  // Styling bucket: rescale is a shader rescale — display only, no refetch.
+  if (group === "styling") {
+    return (
+      <div style={{ display: "grid", gap: 4 }}>
+        <span className="field-label">Rescale (dequantized)</span>
+        <div style={{ display: "grid", gap: 4, gridTemplateColumns: "1fr 1fr" }}>
+          <input
+            type="number"
+            aria-label="rescaleMin"
+            step={0.01}
+            value={state.rescaleMin}
+            onChange={(e) => update({ rescaleMin: Number(e.target.value) })}
+          />
+          <input
+            type="number"
+            aria-label="rescaleMax"
+            step={0.01}
+            value={state.rescaleMax}
+            onChange={(e) => update({ rescaleMax: Number(e.target.value) })}
+          />
+        </div>
+      </div>
+    );
+  }
+  if (group === "instant") return null;
+
+  // Fetch bucket: year + band pickers each re-read different bands.
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <label style={{ display: "grid", gap: 4 }}>
@@ -28,40 +57,23 @@ export function AefControls({
         label="Red band"
         value={state.rBand}
         labels={labels}
+        maxBand={ctx.bandCount - 1}
         onChange={(v) => update({ rBand: v })}
       />
       <BandSlider
         label="Green band"
         value={state.gBand}
         labels={labels}
+        maxBand={ctx.bandCount - 1}
         onChange={(v) => update({ gBand: v })}
       />
       <BandSlider
         label="Blue band"
         value={state.bBand}
         labels={labels}
+        maxBand={ctx.bandCount - 1}
         onChange={(v) => update({ bBand: v })}
       />
-
-      <div style={{ display: "grid", gap: 4 }}>
-        <span className="field-label">Rescale (dequantized)</span>
-        <div style={{ display: "grid", gap: 4, gridTemplateColumns: "1fr 1fr" }}>
-          <input
-            type="number"
-            aria-label="rescaleMin"
-            step={0.01}
-            value={state.rescaleMin}
-            onChange={(e) => update({ rescaleMin: Number(e.target.value) })}
-          />
-          <input
-            type="number"
-            aria-label="rescaleMax"
-            step={0.01}
-            value={state.rescaleMax}
-            onChange={(e) => update({ rescaleMax: Number(e.target.value) })}
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -70,11 +82,13 @@ function BandSlider({
   label,
   value,
   labels,
+  maxBand,
   onChange,
 }: {
   label: string;
   value: number;
   labels: readonly string[];
+  maxBand: number;
   onChange: (next: number) => void;
 }) {
   const labelText = labels[value] ?? `band ${value}`;
@@ -92,7 +106,7 @@ function BandSlider({
       <input
         type="range"
         min={0}
-        max={NUM_BANDS - 1}
+        max={Math.max(0, maxBand)}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />

@@ -4,7 +4,7 @@ import type { Texture } from "@luma.gl/core";
 import * as zarr from "zarrita";
 import { NUM_BANDS } from "./constants";
 
-export type AefTileData = MinimalTileData & {
+export type BandCompositeTileData = MinimalTileData & {
   /** r8sint Texture2DArray; depth = NUM_BANDS. Layer `i` = band `i`. */
   texture: Texture;
 };
@@ -13,10 +13,10 @@ export type AefTileData = MinimalTileData & {
  * pinned by `selection`), then upload the int8 data as an r8sint
  * Texture2DArray. Zarrita's row-major `[band, y, x]` layout matches the
  * Texture2DArray's layer-major storage one-for-one — no transpose. */
-export async function getAefTileData(
+export async function getBandCompositeTileData(
   arr: zarr.Array<"int8", zarr.Readable>,
   options: GetTileDataOptions,
-): Promise<AefTileData> {
+): Promise<BandCompositeTileData> {
   const { device, sliceSpec, width, height, signal } = options;
   const chunk = await zarr.get(arr, sliceSpec, { signal });
   const { data } = chunk;

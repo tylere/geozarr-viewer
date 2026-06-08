@@ -2,19 +2,51 @@ import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import * as zarr from "zarrita";
 import { LOCATIONS } from "../../../locations";
 import { spatialTileSize } from "../../chunk-size";
-import { openV3Group } from "../../load-zarr";
+import { asConsolidated, openV3Group } from "../../load-zarr";
 import type { ZarrProfile } from "../../profile";
 import { fetchBandLabels } from "./band-labels";
-import { AEF_URL_PATTERN, AEF_VARIABLE, MIN_ZOOM, NUM_BANDS } from "./constants";
-import { AefControls } from "./controls";
-import { makeAefRenderTile } from "./render-tile";
-import { getAefTileData } from "./tile-loader";
-import type { AefContext, AefState } from "./types";
+import { MIN_ZOOM, NUM_BANDS } from "./constants";
+import { BandCompositeControls } from "./controls";
+import { makeRgbRenderTile } from "./render-tile";
+import { getBandCompositeTileData } from "./tile-loader";
+import type { BandCompositeContext, BandCompositeState } from "./types";
 
-export const aefProfile: ZarrProfile<AefState, AefContext> = {
-  id: "aef",
-  label: "AlphaEarth Foundations Mosaic",
-  matches: (url) => url.includes(AEF_URL_PATTERN),
+/** Find a renderable multi-band variable: a top-level array `[time?, band,
+ * y, x]` whose band axis (the dim before the spatial pair) has ≥ 3 entries.
+ * The producer's int8 quantization is dataset-specific (see the tile loader),
+ * so the dtype is asserted rather than generalized. */
+async function findBandVariable(
+  group: zarr.Group<zarr.Readable>,
+): Promise<{ name: string; arr: zarr.Array<"int8", zarr.Readable> }> {
+  const store = asConsolidated(group.store);
+  // List nodes from consolidated metadata, else probe the known name
+  // (`embeddings`) — a plain .zarr like AEF ships no consolidated metadata.
+  const names = store
+    ? store.contents().filter((e) => e.kind === "array").map((e) => e.path.replace(/^\/+/, ""))
+    : ["embeddings"];
+  for (const path of names) {
+    if (!path || path.includes("/")) continue;
+    let arr: zarr.Array<zarr.DataType, zarr.Readable>;
+    try {
+      arr = await zarr.open.v3(group.resolve(path), { kind: "array" });
+    } catch {
+      continue;
+    }
+    const nd = arr.shape.length;
+    if (nd < 3) continue;
+    const bandCount = arr.shape[nd - 3] ?? 0;
+    if (bandCount < 3) continue;
+    if (!arr.is("int8")) continue;
+    return { name: path, arr: arr as zarr.Array<"int8", zarr.Readable> };
+  }
+  throw new Error(
+    "RGB band composite: no int8 multi-band variable found (expected `[time?, band, y, x]` with ≥3 bands).",
+  );
+}
+
+export const bandCompositeProfile: ZarrProfile<BandCompositeState, BandCompositeContext> = {
+  id: "band-composite",
+  label: "RGB band composite",
   needsColormap: false,
   // No overviews: the layer only renders at/above MIN_ZOOM (see
   // constants.ts). Below it the chassis shows a zoom-in hint instead of a
@@ -23,38 +55,35 @@ export const aefProfile: ZarrProfile<AefState, AefContext> = {
 
   getStructure: (ctx) => ({
     zarrVersion: "v3",
-    variables: [{ path: AEF_VARIABLE }],
-    // AEF ships GeoZarr-compliant root attrs; we pass them through
+    variables: [{ path: ctx.variable }],
+    // Store ships GeoZarr-compliant root attrs; we pass them through
     // unchanged as the layer's `metadata` prop.
     metadataSource: "store-native",
     metadata: ctx.rootAttrs,
   }),
 
-  // The `embeddings` array is already opened in prepare(); expose it
-  // here so App.tsx's `node` state holds the Array (not the parent
-  // Group). Lets the Structure panel show shape/dtype/chunks/fillValue.
+  // The band variable is opened in prepare(); expose it here so App.tsx's
+  // `node` state holds the Array (not the parent Group). Lets the Structure
+  // panel show shape/dtype/chunks/fillValue.
   resolveNode: async (ctx) => ctx.embeddings,
 
   async prepare(url, _signal) {
-    const opened = await openV3Group(url);
-    const embeddings = await zarr.open.v3(opened.group.resolve(AEF_VARIABLE), {
-      kind: "array",
-    });
-    if (!embeddings.is("int8")) {
-      throw new Error(
-        `Expected AEF "${AEF_VARIABLE}" to be int8, got ${embeddings.dtype}`,
-      );
-    }
+    const opened = await openV3Group(url, { consolidated: true });
+    const { name, arr: embeddings } = await findBandVariable(opened.group);
     const bandLabels = await fetchBandLabels(opened.group);
-    // The `time` dim is the first axis of the embeddings array.
-    const yearCount = embeddings.shape[0] ?? 0;
+    const nd = embeddings.shape.length;
+    // Leading (non-band, non-spatial) axis is the time/year dim, if any.
+    const yearCount = nd >= 4 ? (embeddings.shape[0] ?? 0) : 1;
+    const bandCount = embeddings.shape[nd - 3] ?? 0;
     return {
       url,
+      variable: name,
       group: opened.group,
       embeddings,
       rootAttrs: opened.group.attrs,
       bandLabels,
       yearCount,
+      bandCount,
     };
   },
 
@@ -71,7 +100,7 @@ export const aefProfile: ZarrProfile<AefState, AefContext> = {
   },
 
   parseUrlParams(p) {
-    const out: Partial<AefState> = {};
+    const out: Partial<BandCompositeState> = {};
     const y = p.get("y");
     if (y !== null && Number.isFinite(Number(y))) out.year = Number(y);
     const r = p.get("r");
@@ -117,22 +146,24 @@ export const aefProfile: ZarrProfile<AefState, AefContext> = {
     };
   },
 
-  Controls: AefControls,
+  Controls: BandCompositeControls,
 
   buildLayer({ ctx, state, chassisState, basemapBeforeId }) {
-    const renderTile = makeAefRenderTile({
+    const renderTile = makeRgbRenderTile({
       rBandIdx: state.rBand,
       gBandIdx: state.gBand,
       bBandIdx: state.bBand,
       rescaleMin: state.rescaleMin,
       rescaleMax: state.rescaleMax,
     });
-    return new ZarrLayer<zarr.Readable, "int8", import("./tile-loader").AefTileData>({
-      id: `aef-${state.year}`,
+    return new ZarrLayer<zarr.Readable, "int8", import("./tile-loader").BandCompositeTileData>({
+      id: `band-composite-${state.year}`,
       node: ctx.embeddings,
       metadata: ctx.rootAttrs,
+      // Assumes the band variable's dims are `[time, band, y, x]` (the only
+      // band-composite source so far); `band: null` loads all bands.
       selection: { time: state.year, band: null },
-      getTileData: getAefTileData,
+      getTileData: getBandCompositeTileData,
       renderTile,
       // Align tile grid with the embeddings array's spatial chunk shape.
       tileSize: spatialTileSize(ctx.embeddings),
