@@ -106,13 +106,6 @@ export function ControlsPanel({
         </summary>
 
         <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-          <div className="section">
-            <span className="section-title">View</span>
-            <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
-              <LocationPicker state={state} update={update} onFlyTo={onFlyTo} />
-            </div>
-          </div>
-
           <ControlGroup
             variant="fetch"
             title="Data · re-reads on change"
@@ -223,6 +216,13 @@ export function ControlsPanel({
               </select>
             </label>
           </ControlGroup>
+
+          <div className="section">
+            <span className="section-title">View</span>
+            <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
+              <LocationPicker state={state} update={update} onFlyTo={onFlyTo} />
+            </div>
+          </div>
         </div>
       </details>
     </div>
