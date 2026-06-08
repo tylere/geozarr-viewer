@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { StepperRange } from "./StepperRange";
 
 const COMMIT_DELAY_MS = 200;
 
@@ -57,13 +58,7 @@ export function DebouncedSlider({
           {display}
         </span>
       </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={draft}
-        onChange={(e) => setDraft(Number(e.target.value))}
-      />
+      <StepperRange value={draft} min={min} max={max} onChange={setDraft} />
     </label>
   );
 }

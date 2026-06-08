@@ -1,4 +1,5 @@
 import { DebouncedSlider } from "../../../components/DebouncedSlider";
+import { StepperRange } from "../../../components/StepperRange";
 import type { ProfileControlsProps } from "../../profile";
 import { defaultDimIndices, type ScalarGridContext, type ScalarGridState } from "./types";
 
@@ -120,13 +121,7 @@ function LiveSlider({
           {formatValue(value)}
         </span>
       </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
+      <StepperRange value={value} min={min} max={max} onChange={onChange} />
     </label>
   );
 }

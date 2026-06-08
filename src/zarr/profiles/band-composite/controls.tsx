@@ -1,3 +1,4 @@
+import { StepperRange } from "../../../components/StepperRange";
 import type { ProfileControlsProps } from "../../profile";
 import { YEAR_ORIGIN } from "./constants";
 import type { BandCompositeContext, BandCompositeState } from "./types";
@@ -103,12 +104,11 @@ function BandSlider({
           {value} · {labelText}
         </span>
       </span>
-      <input
-        type="range"
+      <StepperRange
+        value={value}
         min={0}
         max={Math.max(0, maxBand)}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={onChange}
       />
     </label>
   );

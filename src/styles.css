@@ -89,6 +89,26 @@ button.primary:hover:not(:disabled) {
   color: var(--accent-on);
 }
 
+/* Compact square step buttons flanking a dimension slider (see
+   StepperRange.tsx). Inherit the base button surface/border; override only
+   sizing and the muted glyph color. */
+.step-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.step-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+.step-btn:disabled {
+  opacity: 0.35;
+}
+
 input[type="text"],
 input[type="number"],
 input:not([type]),
