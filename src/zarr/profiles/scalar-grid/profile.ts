@@ -16,6 +16,7 @@ import { KEEP_MIN_ZOOM_EXTENT } from "../../../render/keep-min-zoom-tiles";
 import { createLogger } from "../../../log";
 import { bytesPerElement, spatialTileSize } from "../../chunk-size";
 import { asConsolidated, openV3Group } from "../../load-zarr";
+import { MultiscaleStoreError, parseMultiscaleDatasets } from "../../multiscale";
 
 const log = createLogger("profile");
 import type { ZarrProfile } from "../../profile";
@@ -448,6 +449,9 @@ export const scalarGridProfile: ZarrProfile<ScalarGridState, ScalarGridContext> 
   async prepare(url, signal) {
     const done = log.time("scalar-grid prepare", "info");
     const opened = await openV3Group(url, { consolidated: true });
+    // A multiscale pyramid needs the multiscale-grid profile; signal the
+    // chassis to switch (cheaper than probing the store up front on every load).
+    if (parseMultiscaleDatasets(opened.group.attrs)) throw new MultiscaleStoreError();
     const arrays = new Map<string, zarr.Array<zarr.DataType, zarr.Readable>>();
     const variables = await enumerateVariables(opened.group, signal, arrays);
     if (variables.length === 0) {

@@ -1,13 +1,16 @@
 import type { AnyZarrProfile } from "../profile";
 import { bandCompositeProfile } from "./band-composite/profile";
+import { multiscaleGridProfile } from "./multiscale-grid/profile";
 import { scalarGridProfile } from "./scalar-grid/profile";
 
 /** Registered profiles, by capability. Selection is by the explicit `?p=`
  * profile id ({@link getProfile}); when none is given, the chassis defaults to
- * `scalar-grid` (see `detectProfile`). The first entry is the default. */
+ * `scalar-grid` unless an async probe detects a multiscale pyramid (see
+ * `detectStoreProfile`). The first entry is the default. */
 export const PROFILES: readonly AnyZarrProfile[] = [
   scalarGridProfile,
   bandCompositeProfile,
+  multiscaleGridProfile,
 ];
 
 /** The default profile when no `?p=` is given: single-band scalar → colormap. */

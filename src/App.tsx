@@ -31,6 +31,8 @@ import { installKeepMinZoomTiles } from "./render/keep-min-zoom-tiles";
 import type { AutoStats } from "./render/stats";
 import { subscribeTileHealth } from "./zarr/tile-error";
 import { detectProfile, normalizeStoreUrl } from "./source";
+import { MultiscaleStoreError } from "./zarr/multiscale";
+import { getProfile } from "./zarr/profiles";
 import {
   buildExampleLoadPatch,
   type ExampleLoadRequest,
@@ -120,10 +122,21 @@ export default function App() {
     setFirstSymbolId(undefined);
   }, [state.basemap]);
 
-  const profile: AnyZarrProfile | null = useMemo(
-    () => detectProfile(state.url, state.profileId),
-    [state.url, state.profileId],
+  // Profile selection. Default = scalar-grid; if its prepare throws
+  // `MultiscaleStoreError` (a multiscale pyramid), the prepare effect below
+  // records the switch in `autoProfile`, keyed to the url so a stale value
+  // never leaks onto a different store.
+  const [autoProfile, setAutoProfile] = useState<{ url: string; id: string } | null>(
+    null,
   );
+  const profile: AnyZarrProfile | null = useMemo(() => {
+    if (state.profileId) return detectProfile(state.url, state.profileId);
+    if (!state.url) return null;
+    if (autoProfile && autoProfile.url === state.url) {
+      return getProfile(autoProfile.id);
+    }
+    return detectProfile(state.url, null); // scalar-grid default
+  }, [state.url, state.profileId, autoProfile]);
 
   // Re-derive profile state on every render from URL params (defaults
   // come from profile.initialState; URL overrides win).
@@ -229,6 +242,15 @@ export default function App() {
         }
       } catch (err) {
         if (ctrl.signal.aborted) return;
+        if (err instanceof MultiscaleStoreError) {
+          // The default profile detected a multiscale pyramid → switch to the
+          // multiscale-grid profile (which re-runs prepare). No error toast.
+          if (!state.profileId && state.url) {
+            log.info("switching to multiscale-grid profile");
+            setAutoProfile({ url: state.url, id: "multiscale-grid" });
+          }
+          return;
+        }
         log.error("profile.prepare failed", err);
         setError(humanizeError(err));
       }
