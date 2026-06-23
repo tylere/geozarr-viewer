@@ -244,6 +244,8 @@ export const multiscaleGridProfile: ZarrProfile<
     return stats ? autoStatsFromGlobal(stats) : null;
   },
 
+  pyramidLevelCount: (ctx) => ctx.levelCount,
+
   getStructure: (ctx) => ({
     zarrVersion: "v3",
     variables: [{ path: ctx.primaryPath, role: "finest" }],

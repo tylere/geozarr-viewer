@@ -1,5 +1,6 @@
 import type { AnyZarrProfile } from "../profile";
 import { bandCompositeProfile } from "./band-composite/profile";
+import { imageOrthographicProfile } from "./image-orthographic/profile";
 import { multiscaleGridProfile } from "./multiscale-grid/profile";
 import { scalarGridProfile } from "./scalar-grid/profile";
 
@@ -11,6 +12,7 @@ export const PROFILES: readonly AnyZarrProfile[] = [
   scalarGridProfile,
   bandCompositeProfile,
   multiscaleGridProfile,
+  imageOrthographicProfile,
 ];
 
 /** The default profile when no `?p=` is given: single-band scalar → colormap. */

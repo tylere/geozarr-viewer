@@ -413,3 +413,21 @@ details.section > div.section-body {
 .theme-dark .control-group--style {
   --group-accent: #8a8fde;
 }
+
+/* Pulsing dot for the pyramid badge's "tiles loading" indicator. */
+.pyramid-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #3b82f6);
+  animation: pyramid-badge-pulse 1s ease-in-out infinite;
+}
+@keyframes pyramid-badge-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}

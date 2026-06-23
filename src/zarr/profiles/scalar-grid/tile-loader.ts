@@ -6,6 +6,7 @@ import {
   buildMultiBandTile,
   type MultiBandTileData,
 } from "../../../render/shared-textures";
+import { tileLoadEnd, tileLoadStart } from "../../../render/tile-activity";
 import { reportTileError, reportTileResult } from "../../tile-error";
 
 const log = createLogger("tiles");
@@ -47,6 +48,9 @@ export function makeScalarGridTileLoader(opts: {
     const { device, sliceSpec, signal, width, height } = options;
     const t0 = log.isEnabled("debug") ? performance.now() : 0;
     let chunk: Awaited<ReturnType<typeof zarr.get>>;
+    // Tile `z` is the pyramid level (0 = coarsest); report as displayIndex z+1
+    // at load START so the badge reflects the level being fetched.
+    tileLoadStart(options.z + 1);
     try {
       chunk = await zarr.get(
         arr as zarr.Array<zarr.NumberDataType, zarr.Readable>,
@@ -56,10 +60,12 @@ export function makeScalarGridTileLoader(opts: {
     } catch (err) {
       // Surface persistent (non-abort) tile failures to the UI; rethrow so
       // deck.gl leaves a gap for this tile rather than rendering stale data.
+      tileLoadEnd();
       reportTileError(err);
       log.debug(`tile ${options.x},${options.y},${options.z} failed`, err);
       throw err;
     }
+    tileLoadEnd();
     reportTileResult(true);
     if (log.isEnabled("debug")) {
       const bytes = (chunk.data as { byteLength?: number }).byteLength;

@@ -21,13 +21,20 @@ import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
+import { ImageViewer } from "./components/ImageViewer";
+import type {
+  ImageOrthographicContext,
+  ImageOrthographicState,
+} from "./zarr/profiles/image-orthographic/types";
 import { formatNumber } from "./components/RangeSlider";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { ArrayOverview, StructureSection } from "./components/StructurePanel";
 import { humanizeError, Toast } from "./components/Toast";
 import { ZoomHint } from "./components/ZoomHint";
 import { createLogger } from "./log";
+import { PyramidBadge } from "./components/PyramidBadge";
 import { installKeepMinZoomTiles } from "./render/keep-min-zoom-tiles";
+import * as tileActivity from "./render/tile-activity";
 import type { AutoStats } from "./render/stats";
 import { subscribeTileHealth } from "./zarr/tile-error";
 import { detectProfile, normalizeStoreUrl } from "./source";
@@ -508,10 +515,39 @@ export default function App() {
     document.documentElement.classList.toggle("theme-dark", darkChrome);
   }, [darkChrome]);
 
+  // Tell the pyramid badge how many levels this store has (null = single-level/
+  // non-multiscale → no level shown). Reset on store/profile change.
+  useEffect(() => {
+    if (!profile || !profileCtx) {
+      tileActivity.reset();
+      return;
+    }
+    tileActivity.setPyramid(profile.pyramidLevelCount?.(profileCtx) ?? null);
+    return () => tileActivity.reset();
+  }, [profile, profileCtx]);
+
+  const activity = useSyncExternalStore(
+    tileActivity.subscribe,
+    tileActivity.getSnapshot,
+  );
+
   const showSingleBandControls = profile?.needsColormap ?? false;
+  // Non-geographic image profiles (OrthographicView host) hide map-only
+  // chassis controls (basemap, location presets, GeoZarr metadata).
+  const geographic = profile?.host !== "image";
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      {profile?.host === "image" ? (
+        profileCtx && profileState ? (
+          <ImageViewer
+            ctx={profileCtx as ImageOrthographicContext}
+            state={profileState as ImageOrthographicState}
+            opacity={state.opacity}
+            autoStats={autoStats}
+          />
+        ) : null
+      ) : (
       <MaplibreMap
         ref={mapRef}
         initialViewState={
@@ -564,12 +600,14 @@ export default function App() {
           onDeviceInitialized={setDevice}
         />
       </MaplibreMap>
+      )}
 
       {profile && profileCtx && profileState && (
         <ControlsPanel
           state={state}
           update={update}
           showSingleBandControls={showSingleBandControls}
+          geographic={geographic}
           autoStats={autoStats}
           onFlyTo={handleFlyTo}
           profileFetchSlot={profile.Controls({
@@ -621,6 +659,7 @@ export default function App() {
                 node={node}
                 structure={structureSummary}
                 codecs={codecSummary}
+                geographic={geographic}
               />
             ) : null
           }
@@ -640,6 +679,13 @@ export default function App() {
           )
         );
       })()}
+
+      <PyramidBadge
+        level={activity.level}
+        levelCount={activity.levelCount}
+        downsample={activity.downsample}
+        loading={activity.inFlight > 0}
+      />
 
       {hover && (
         <div

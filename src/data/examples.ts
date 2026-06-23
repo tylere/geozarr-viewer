@@ -151,4 +151,32 @@ export const EXAMPLES: Example[] = [
     // anomaly, so a diverging map (rdbu: red=dry, blue=wet) over ±2 reads well.
     params: { lng: "37", lat: "5", zoom: "4", colormap: "rdbu", rescale: "-2,2" },
   },
+  {
+    title: "IDR — idr0033A / BR00109990_C2 (Cell Painting, OME-Zarr)",
+    url: "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0033A/BR00109990_C2.zarr",
+    // Bioimaging OME-Zarr (no CRS): render in the non-geographic image
+    // profile's OrthographicView rather than on the map.
+    params: { p: "image-orthographic" },
+  },
+  {
+    // OME-Zarr HCS plate (t,c,z,y,x); the image profile descends to the first
+    // well/field (A/1) and renders it.
+    title: "IDR — idr0010 / 76-45 plate, well A/1 (OME-Zarr HCS)",
+    url: "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr",
+    params: { p: "image-orthographic" },
+  },
+  {
+    // 5D time-lapse (t=47, z=21, 3 channels) — exercises both the t and z
+    // scrub sliders alongside the channel picker.
+    title: "IDR — idr0026 4D time-lapse (47×t, 21×z, 3-channel, OME-Zarr)",
+    url: "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0026/3.66.9-6.141020_15-41-29.00.ome.zarr",
+    params: { p: "image-orthographic" },
+  },
+  {
+    // Gigapixel whole-slide: OME-Zarr v0.4 (zarr v2), finest 144384×93184 over
+    // 11 pyramid levels. Exercises v2 parsing + viewport-windowed loading.
+    title: "IDR — idr0083A whole-slide (v0.4, 144k×93k, OME-Zarr)",
+    url: "https://livingobjects.ebi.ac.uk/idr/zarr/v0.4/idr0083A/9822152.zarr",
+    params: { p: "image-orthographic" },
+  },
 ];

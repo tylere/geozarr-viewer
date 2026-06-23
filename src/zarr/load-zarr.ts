@@ -167,7 +167,7 @@ async function openIcechunk(
  *    cheap hierarchy listing without per-array `zarr.json` fetches. */
 export async function openV3Group(
   url: string,
-  options: { consolidated?: boolean } = {},
+  options: { consolidated?: boolean; version?: "v3" | "auto" } = {},
 ): Promise<OpenedStore> {
   // Suffix is the fast path; for suffix-less URLs, a layout probe catches
   // Icechunk repos whose name doesn't end in `.icechunk` (e.g. source.coop's
@@ -199,7 +199,13 @@ export async function openV3Group(
       log.debug("consolidated metadata: miss (will probe variables)");
     }
   }
-  const group = await zarr.open.v3(store, { kind: "group" });
+  // Default to v3 (every source.coop store). `version: "auto"` lets the image
+  // profile open OME-Zarr v0.4 stores (zarr v2: `.zgroup`/`.zarray`); zarrita's
+  // `open` auto-detects, trying v3 then falling back to v2.
+  const group =
+    options.version === "auto"
+      ? await zarr.open(store, { kind: "group" })
+      : await zarr.open.v3(store, { kind: "group" });
   done();
   return { group, store };
 }

@@ -14,6 +14,7 @@ import * as zarr from "zarrita";
 import { createLogger } from "../log";
 import { reportTileError, reportTileResult } from "../zarr/tile-error";
 import { decodedChunkCache } from "./chunk-cache";
+import { tileLoadEnd, tileLoadStart } from "./tile-activity";
 import { registerSampleTile } from "./sample-source";
 
 const log = createLogger("tiles");
@@ -220,6 +221,7 @@ export function makeTextureArrayTileLoader(opts: {
     if (!full) {
       const t0 = log.isEnabled("debug") ? performance.now() : 0;
       let chunk: Awaited<ReturnType<typeof zarr.get>>;
+      tileLoadStart(options.z + 1);
       try {
         chunk = await zarr.get(
           arr as zarr.Array<zarr.NumberDataType, zarr.Readable>,
@@ -229,10 +231,12 @@ export function makeTextureArrayTileLoader(opts: {
       } catch (err) {
         // Surface persistent (non-abort) tile failures; rethrow so deck.gl
         // leaves a gap rather than rendering stale data.
+        tileLoadEnd();
         reportTileError(err);
         log.debug(`tile ${options.x},${options.y},${options.z} failed`, err);
         throw err;
       }
+      tileLoadEnd();
       reportTileResult(true);
       if (log.isEnabled("debug")) {
         const bytes = (chunk.data as { byteLength?: number }).byteLength;

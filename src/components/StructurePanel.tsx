@@ -48,6 +48,9 @@ type Props = {
   /** Codec/sharding info fetched on the side; `null` while pending or on
    * failure. */
   codecs: CodecSummary | null;
+  /** False for non-geographic (image) hosts — hides the GeoZarr metadata
+   * section, which is map-only. Defaults to shown when omitted. */
+  geographic?: boolean;
 };
 
 /** Always-visible orientation block at the top of the Options panel: the
@@ -88,6 +91,7 @@ export function StructureSection({
   node,
   structure,
   codecs,
+  geographic = true,
 }: Props) {
   const isOpen = state.panelStructure === "open";
   return (
@@ -120,7 +124,7 @@ export function StructureSection({
       <div className="section-body">
         <VariableSection structure={structure} node={node} />
         <ShardingSection codecs={codecs} />
-        <GeoZarrSection structure={structure} />
+        {geographic && <GeoZarrSection structure={structure} />}
         <AttributesSection node={node} />
       </div>
     </details>

@@ -54,6 +54,9 @@ type Props = {
   structureSlot: ReactNode;
   /** Whether to show single-band colormap + rescale controls. */
   showSingleBandControls: boolean;
+  /** False for non-geographic (image) hosts — hides map-only controls
+   * (basemap, location presets). */
+  geographic: boolean;
   autoStats: AutoStats | null;
   /** Animated map move. Wired to the location dropdown so picking a
    * preset both moves the map and updates the URL. */
@@ -69,6 +72,7 @@ export function ControlsPanel({
   overviewSlot,
   structureSlot,
   showSingleBandControls,
+  geographic,
   autoStats,
   onFlyTo,
 }: Props) {
@@ -188,27 +192,37 @@ export function ControlsPanel({
                 onChange={(e) => update({ opacity: Number(e.target.value) })}
               />
             </label>
-            <label style={{ display: "grid", gap: 4 }}>
-              <span className="field-label">Basemap</span>
-              <select
-                value={state.basemap}
-                onChange={(e) => update({ basemap: e.target.value as Basemap })}
-              >
-                {BASEMAP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {geographic && (
+              <label style={{ display: "grid", gap: 4 }}>
+                <span className="field-label">Basemap</span>
+                <select
+                  value={state.basemap}
+                  onChange={(e) =>
+                    update({ basemap: e.target.value as Basemap })
+                  }
+                >
+                  {BASEMAP_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </ControlGroup>
 
-          <div className="section">
-            <span className="section-title">View</span>
-            <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
-              <LocationPicker state={state} update={update} onFlyTo={onFlyTo} />
+          {geographic && (
+            <div className="section">
+              <span className="section-title">View</span>
+              <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
+                <LocationPicker
+                  state={state}
+                  update={update}
+                  onFlyTo={onFlyTo}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {structureSlot}
         </div>

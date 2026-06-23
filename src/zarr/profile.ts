@@ -61,6 +61,14 @@ export type ZarrProfile<
 > = {
   id: string;
   label: string;
+  /** Which render host the chassis mounts for this profile:
+   *   - "map" (default): MapLibre + deck.gl overlay, geographic coords. The
+   *     profile's `buildLayer` result is rendered there.
+   *   - "image": a standalone deck.gl `OrthographicView` for non-geographic
+   *     pixel-space data (bioimaging OME-Zarr). `buildLayer`/`initialBounds`/
+   *     `initialView` are unused; the {@link ImageViewer} reads `ctx`+`state`
+   *     directly. */
+  host?: "map" | "image";
   prepare: (url: string, signal: AbortSignal) => Promise<Ctx>;
   initialState: (ctx: Ctx) => S;
   parseUrlParams: (p: URLSearchParams) => Partial<S>;
@@ -109,6 +117,10 @@ export type ZarrProfile<
   /** Describe the store/variable shape currently being rendered. Used
    * by the Structure panel; pure function of `ctx` + `state`. */
   getStructure: (ctx: Ctx, state: S) => StructureProfileSummary;
+  /** Number of pyramid levels for a multiscale store, used by the level badge.
+   * Return `null` (or omit) for single-level / non-multiscale stores so the
+   * badge shows no level. */
+  pyramidLevelCount?: (ctx: Ctx) => number | null;
   computeAutoStats?: (args: {
     ctx: Ctx;
     state: S;

@@ -3,6 +3,7 @@ import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import type { Texture } from "@luma.gl/core";
 import * as zarr from "zarrita";
 import { createLogger } from "../../../log";
+import { tileLoadEnd, tileLoadStart } from "../../../render/tile-activity";
 import { reportTileError, reportTileResult } from "../../tile-error";
 import { NUM_BANDS } from "./constants";
 
@@ -23,17 +24,20 @@ export async function getBandCompositeTileData(
 ): Promise<BandCompositeTileData> {
   const { device, sliceSpec, width, height, signal } = options;
   const t0 = log.isEnabled("debug") ? performance.now() : 0;
+  tileLoadStart(options.z + 1);
   const chunk = await (async () => {
     try {
       return await zarr.get(arr, sliceSpec, { signal });
     } catch (err) {
       // Surface persistent (non-abort) tile failures; rethrow so deck.gl
       // leaves a gap rather than rendering stale data.
+      tileLoadEnd();
       reportTileError(err);
       log.debug(`tile ${options.x},${options.y},${options.z} failed`, err);
       throw err;
     }
   })();
+  tileLoadEnd();
   reportTileResult(true);
   const { data } = chunk;
   if (log.isEnabled("debug")) {
