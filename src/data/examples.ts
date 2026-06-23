@@ -151,6 +151,26 @@ export const EXAMPLES: Example[] = [
     // anomaly, so a diverging map (rdbu: red=dry, blue=wet) over ±2 reads well.
     params: { lng: "37", lat: "5", zoom: "4", colormap: "rdbu", rescale: "-2,2" },
   },
+  // --- Multiscale pyramid (multiscale-grid profile, auto-detected) ---
+  // Meta CHM v2: Meta's DINOv3 global canopy-height map (native ~1.19 m,
+  // EPSG:3857, uint8 metres) repackaged as a virtual multiscale GeoZarr over
+  // Icechunk — `1x`(native)..`64x` level groups + a `multiscales` root attr.
+  // The scalar-grid profile detects the `multiscales` attr and hands off to the
+  // multiscale-grid profile, which reads each level's `spatial_ref`
+  // (crs_wkt + GDAL GeoTransform) and renders overviews with on-the-fly
+  // reprojection — no explicit `p` needed. Centered on the Amazon (the same
+  // vegetated patch the profile auto-samples for its rescale); chm is in metres.
+  {
+    title: "Meta CHM v2 — Canopy height (multiscale pyramid)",
+    url: "https://data.source.coop/tge-labs/meta-chm-v2/zarr/chm.zarr.icechunk",
+    params: {
+      lng: "-62",
+      lat: "-4",
+      zoom: "6",
+      colormap: "viridis",
+      rescale: "0,30",
+    },
+  },
   {
     title: "IDR — idr0033A / BR00109990_C2 (Cell Painting, OME-Zarr)",
     url: "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0033A/BR00109990_C2.zarr",

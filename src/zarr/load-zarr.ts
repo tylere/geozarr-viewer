@@ -32,6 +32,24 @@ export type IcechunkInfo = {
 
 type IcechunkAwareStore = zarr.Readable & { icechunk: IcechunkInfo };
 
+/** Remap a source.coop S3 object URL onto the `data.source.coop` CORS proxy.
+ *
+ * Virtual-chunk Icechunk stores (e.g. Meta CHM v2) record their refs as
+ * absolute `s3://<region>.opendata.source.coop/<key>` locations. icechunk-js
+ * translates those to **path-style** `https://s3.amazonaws.com/<bucket>/<key>`
+ * URLs — but the bucket name is dotted (`us-west-2.opendata.source.coop`), so
+ * the global S3 endpoint answers a 301 redirect to the regional host, which
+ * icechunk-js's virtual fetch treats as a hard error (it only accepts 200/206).
+ * The same objects are served with permissive CORS + range support at
+ * `https://data.source.coop/<key>`, so we rewrite onto that host. URLs that
+ * don't match a source.coop S3 bucket pass through unchanged. */
+export function rewriteSourceCoopS3Url(url: string): string {
+  const m = url.match(
+    /^https:\/\/s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com\/[a-z0-9-]+\.opendata\.source\.coop\/(.+)$/,
+  );
+  return m ? `https://data.source.coop/${m[1]}` : url;
+}
+
 export type OpenedStore = {
   group: zarr.Group<zarr.Readable>;
   /** The underlying store. When `consolidated: true` was requested, this
@@ -102,6 +120,14 @@ async function openIcechunk(
   const session = await repo.checkoutBranch(branch);
   const ice = await IcechunkStore.open(session, {
     withRangeCoalescing: zarr.withRangeCoalescing,
+    // Virtual chunks (e.g. Meta CHM v2's refs into source.coop COGs) are fetched
+    // through this hook; redirect path-style S3 URLs to the CORS proxy (see
+    // `rewriteSourceCoopS3Url`). Native chunk/metadata reads use `storage` and
+    // are unaffected.
+    fetchClient: {
+      fetch: (u: string, init?: RequestInit) =>
+        fetch(rewriteSourceCoopS3Url(u), init),
+    },
   });
 
   const info: IcechunkInfo = {
