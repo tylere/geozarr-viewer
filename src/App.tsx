@@ -508,7 +508,6 @@ export default function App() {
     document.documentElement.classList.toggle("theme-dark", darkChrome);
   }, [darkChrome]);
 
-  const profileLabel = profile?.label ?? null;
   const showSingleBandControls = profile?.needsColormap ?? false;
 
   return (
@@ -570,7 +569,6 @@ export default function App() {
         <ControlsPanel
           state={state}
           update={update}
-          profileLabel={profileLabel}
           showSingleBandControls={showSingleBandControls}
           autoStats={autoStats}
           onFlyTo={handleFlyTo}
