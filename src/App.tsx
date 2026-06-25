@@ -608,7 +608,6 @@ export default function App() {
           showSingleBandControls={showSingleBandControls}
           geographic={geographic}
           autoStats={autoStats}
-          onFlyTo={handleFlyTo}
           profileFetchSlot={profile.Controls({
             ctx: profileCtx,
             state: profileState,

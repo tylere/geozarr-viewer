@@ -1,7 +1,6 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { ReactNode } from "react";
-import { findMatchingLocation, LOCATIONS } from "../locations";
 import type { AutoStats } from "../render/stats";
 import { percentileFromHistogram } from "../render/stats";
 import type {
@@ -49,18 +48,13 @@ type Props = {
    * controls. `null` while the structure summary is still resolving. */
   overviewSlot: ReactNode;
   /** Store-introspection content (the former Structure panel), rendered as a
-   * collapsible section below "View". `null` while the structure summary is
-   * still resolving. */
+   * collapsible section. `null` while the structure summary is still resolving. */
   structureSlot: ReactNode;
   /** Whether to show single-band colormap + rescale controls. */
   showSingleBandControls: boolean;
-  /** False for non-geographic (image) hosts — hides map-only controls
-   * (basemap, location presets). */
+  /** False for non-geographic (image) hosts — hides map-only controls (basemap). */
   geographic: boolean;
   autoStats: AutoStats | null;
-  /** Animated map move. Wired to the location dropdown so picking a
-   * preset both moves the map and updates the URL. */
-  onFlyTo: (longitude: number, latitude: number, zoom: number) => void;
 };
 
 export function ControlsPanel({
@@ -74,7 +68,6 @@ export function ControlsPanel({
   showSingleBandControls,
   geographic,
   autoStats,
-  onFlyTo,
 }: Props) {
   const isOpen = state.panel === "open";
   return (
@@ -211,19 +204,6 @@ export function ControlsPanel({
             )}
           </ControlGroup>
 
-          {geographic && (
-            <div className="section">
-              <span className="section-title">View</span>
-              <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
-                <LocationPicker
-                  state={state}
-                  update={update}
-                  onFlyTo={onFlyTo}
-                />
-              </div>
-            </div>
-          )}
-
           {structureSlot}
         </div>
       </details>
@@ -259,46 +239,6 @@ function ControlGroup({
       <span className="control-group__caption">{caption}</span>
       <div style={{ display: "grid", gap: 10, marginTop: 8 }}>{children}</div>
     </section>
-  );
-}
-
-function LocationPicker({
-  state,
-  update,
-  onFlyTo,
-}: {
-  state: ViewerState;
-  update: (patch: ViewerStateUpdate) => void;
-  onFlyTo: (longitude: number, latitude: number, zoom: number) => void;
-}) {
-  // The dropdown's selected value derives from state.view (the URL). When
-  // the user pans/zooms manually, the match flips to "" ("Custom view").
-  const match = findMatchingLocation(state.view);
-  const value = match?.id ?? "";
-  const handleChange = (id: string) => {
-    const loc = LOCATIONS.find((l) => l.id === id);
-    if (!loc) return;
-    // Trigger the animated map move first, then write the new view to
-    // the URL. The flyTo's `moveend` fires without `originalEvent`, so
-    // App.onMoveEnd won't double-write.
-    onFlyTo(loc.longitude, loc.latitude, loc.zoom);
-    update({ view: [loc.longitude, loc.latitude, loc.zoom] });
-  };
-  return (
-    <select
-      aria-label="location"
-      value={value}
-      onChange={(e) => handleChange(e.target.value)}
-    >
-      <option value="" disabled>
-        {value === "" ? "Custom view" : "Choose a preset…"}
-      </option>
-      {LOCATIONS.map((l) => (
-        <option key={l.id} value={l.id}>
-          {l.label}
-        </option>
-      ))}
-    </select>
   );
 }
 
