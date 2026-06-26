@@ -19,6 +19,42 @@ type OmeBlock = {
   well?: { images?: { path?: string }[] };
 };
 
+/** Thrown by the default (scalar-grid) profile's `prepare` when it detects an
+ * OME-Zarr image store, signalling the chassis to switch to the
+ * `image-orthographic` profile. Mirrors `MultiscaleStoreError`. */
+export class OmeZarrStoreError extends Error {
+  constructor() {
+    super("OME-Zarr image store — use the image-orthographic profile");
+    this.name = "OmeZarrStoreError";
+  }
+}
+
+/** Pure attrs predicate: true when a root group's attrs carry OME-Zarr image
+ * markers. v0.5 = `ome` wrapper object; v0.4 = root-level `multiscales` with an
+ * `axes` array (distinct from CF/rioxarray multiscales, which have no `axes`),
+ * or HCS `plate`/`well`, or `bioformats2raw.layout`.
+ *
+ * Takes raw attrs directly (not via {@link omeOf}): `omeOf` falls back to the
+ * raw root attrs when there's no `ome` wrapper, which would blur the
+ * v0.5-wrapper vs v0.4-root distinction this detector relies on. */
+export function isOmeZarrAttrs(rootAttrs: unknown): boolean {
+  if (typeof rootAttrs !== "object" || rootAttrs === null) return false;
+  const attrs = rootAttrs as Record<string, unknown>;
+  if (typeof attrs.ome === "object" && attrs.ome !== null) return true; // v0.5
+  const ms = attrs.multiscales;
+  if (
+    Array.isArray(ms) &&
+    ms.length > 0 &&
+    Array.isArray((ms[0] as { axes?: unknown })?.axes)
+  ) {
+    return true; // v0.4 OME (axes distinguish it from CF/rioxarray pyramids)
+  }
+  if (typeof attrs.plate === "object" && attrs.plate !== null) return true;
+  if (typeof attrs.well === "object" && attrs.well !== null) return true;
+  if ("bioformats2raw.layout" in attrs) return true;
+  return false;
+}
+
 function omeOf(group: zarr.Group<zarr.Readable>): OmeBlock | undefined {
   const attrs = group.attrs as Record<string, unknown>;
   // OME-Zarr v0.5 nests metadata under an `ome` key; v0.4 puts `multiscales`/

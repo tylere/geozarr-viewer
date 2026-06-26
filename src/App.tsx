@@ -39,6 +39,7 @@ import type { AutoStats } from "./render/stats";
 import { subscribeTileHealth } from "./zarr/tile-error";
 import { detectProfile, normalizeStoreUrl } from "./source";
 import { MultiscaleStoreError } from "./zarr/multiscale";
+import { OmeZarrStoreError } from "./zarr/profiles/image-orthographic/ome";
 import { getProfile } from "./zarr/profiles";
 import {
   buildExampleLoadPatch,
@@ -255,6 +256,15 @@ export default function App() {
           if (!state.profileId && state.url) {
             log.info("switching to multiscale-grid profile");
             setAutoProfile({ url: state.url, id: "multiscale-grid" });
+          }
+          return;
+        }
+        if (err instanceof OmeZarrStoreError) {
+          // The default profile detected an OME-Zarr image → switch to the
+          // image-orthographic profile (which re-runs prepare). No error toast.
+          if (!state.profileId && state.url) {
+            log.info("switching to image-orthographic profile");
+            setAutoProfile({ url: state.url, id: "image-orthographic" });
           }
           return;
         }
@@ -521,7 +531,10 @@ export default function App() {
       tileActivity.reset();
       return;
     }
-    tileActivity.setPyramid(profile.pyramidLevelCount?.(profileCtx) ?? null);
+    tileActivity.setPyramid(
+      profile.pyramidLevelCount?.(profileCtx) ?? null,
+      profile.pyramidLevelDownsamples?.(profileCtx) ?? null,
+    );
     return () => tileActivity.reset();
   }, [profile, profileCtx]);
 

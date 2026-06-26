@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   getSnapshot,
+  reportDisplayedTiles,
   reset,
   setActiveLevel,
   setPyramid,
   tileLoadEnd,
   tileLoadStart,
 } from "./tile-activity";
+
+const tile = (z: number, isLoaded = true) => ({ index: { x: 0, y: 0, z }, isLoaded });
 
 beforeEach(() => reset());
 
@@ -59,6 +62,37 @@ describe("tile-activity", () => {
     // Burst 2 (e.g. zoomed out): a coarser level only → level drops.
     tileLoadStart(2);
     tileLoadEnd();
+    expect(getSnapshot().level).toBe(2);
+  });
+
+  it("reportDisplayedTiles tracks the finest displayed level without a fetch", () => {
+    setPyramid(7, [64, 32, 16, 8, 4, 2, 1]); // displayIndex order: 0=coarsest
+    // Zoomed in: deck shows tiles up to z=6 (finest) → displayIndex 7.
+    reportDisplayedTiles([tile(5), tile(6)]);
+    expect(getSnapshot()).toMatchObject({ level: 7, downsample: 1 });
+    // Zoom back out to a cached coarser set (z=2) — no fetch, badge still updates.
+    reportDisplayedTiles([tile(2)]);
+    expect(getSnapshot()).toMatchObject({ level: 3, downsample: 16 });
+  });
+
+  it("reportDisplayedTiles ignores not-yet-loaded tiles and empty sets", () => {
+    setPyramid(7, [64, 32, 16, 8, 4, 2, 1]);
+    reportDisplayedTiles([tile(2)]);
+    // A finer tile is selected but still loading → don't advance the level yet.
+    reportDisplayedTiles([tile(2), tile(6, false)]);
+    expect(getSnapshot().level).toBe(3);
+    reportDisplayedTiles([]); // no tiles → no change
+    expect(getSnapshot().level).toBe(3);
+  });
+
+  it("reportDisplayedTiles is a no-op for non-multiscale stores and during loads", () => {
+    setPyramid(null); // single-level store
+    reportDisplayedTiles([tile(3)]);
+    expect(getSnapshot().level).toBeNull();
+
+    setPyramid(7, [64, 32, 16, 8, 4, 2, 1]);
+    tileLoadStart(2); // a fetch is in flight → the load path owns the level
+    reportDisplayedTiles([tile(6)]);
     expect(getSnapshot().level).toBe(2);
   });
 

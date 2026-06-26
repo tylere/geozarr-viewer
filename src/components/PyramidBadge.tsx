@@ -1,11 +1,25 @@
 import { useEffect, useState } from "react";
 
+/** Convert the internal displayIndex (`1` = coarsest overview … `N` = finest
+ * native, the shared `tile-activity` convention used by both render hosts) to
+ * OME-Zarr dataset numbering for display: `0` = finest (full resolution) …
+ * `N-1` = coarsest overview, matching the dataset paths microscopy tools
+ * (vizarr/napari) use. Pure so it can be unit-tested. */
+export function omeLevelLabel(
+  level: number,
+  levelCount: number,
+): { shown: number; max: number } {
+  return { shown: levelCount - level, max: levelCount - 1 };
+}
+
 /** Bottom-left overlay showing the current pyramid level and a tiles-loading
  * dot. Works for both render hosts (fed by `src/render/tile-activity.ts`).
  * Renders nothing when there's neither a multiscale level nor activity.
  *
- * `level`/`levelCount` are a displayIndex where 1 = coarsest overview and N =
- * finest native. `downsample` (when given) is the level's factor vs finest. */
+ * `level`/`levelCount` arrive as a displayIndex (1 = coarsest … N = finest) but
+ * are shown in OME-Zarr dataset numbering (0 = finest native … N-1 = coarsest)
+ * via {@link omeLevelLabel}. `downsample` (when given) is the level's factor vs
+ * finest. */
 export function PyramidBadge({
   level,
   levelCount,
@@ -49,8 +63,11 @@ export function PyramidBadge({
     >
       {hasLevel && (
         <span>
-          Level {level}/{levelCount}
-          {downsample != null && downsample > 1 ? ` · 1:${downsample}` : ""}
+          {(() => {
+            const { shown, max } = omeLevelLabel(level, levelCount);
+            return `Level ${shown}/${max}`;
+          })()}
+          {downsample != null ? ` · 1:${downsample}` : ""}
         </span>
       )}
       {showLoading && (

@@ -14,6 +14,9 @@ export type MultiscaleGridContext = ProfileBaseContext & {
   variable: string;
   /** Number of pyramid levels. */
   levelCount: number;
+  /** Downsample factor for each level relative to the finest (displayIndex order:
+   * index 0 = coarsest, index levelCount-1 = 1). */
+  levelDownsamples: number[];
   /** Native (finest) pixel size in metres. */
   finestPixelMeters: number;
   /** `proj:code` from the store's `spatial_ref`, if present (display only). */
