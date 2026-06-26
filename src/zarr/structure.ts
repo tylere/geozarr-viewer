@@ -14,17 +14,29 @@
 export type ConventionEntry = {
   name: string;
   version: string | null;
+  /** Link to the convention's spec/docs, when one can be sourced. */
+  specUrl?: string;
   /** Set when the convention was inferred from a legacy/pre-standard signal
    * rather than the canonical `zarr_conventions` registry. The text explains
    * the current best practice and is surfaced as a warning tooltip. */
   legacy?: string;
 };
 
+const MULTISCALES_REPO_URL = "https://github.com/zarr-conventions/multiscales";
+
 const LEGACY_MULTISCALES_NOTE =
   "Detected from a legacy array-shaped `multiscales` attribute (the " +
   "xarray-multiscale / ndpyramid layout). Current best practice is to declare " +
   "multiscale pyramids via the `zarr_conventions` registry — see " +
   "github.com/zarr-conventions/multiscales.";
+
+/** Versioned CF Conventions document URL. CF publishes each release at a stable
+ * path; without a version we fall back to the project landing page. */
+function cfSpecUrl(version: string | null): string {
+  return version
+    ? `https://cfconventions.org/Data/cf-conventions/cf-conventions-${version}/cf-conventions.html`
+    : "https://cfconventions.org/";
+}
 
 /**
  * Detect Zarr conventions used by the root group from its attributes.
@@ -54,7 +66,13 @@ export function detectConventions(
   if (typeof conv === "string" && conv.trim()) {
     for (const token of conv.split(/[\s,]+/).filter(Boolean)) {
       const m = /^([A-Za-z][A-Za-z0-9_-]*)-(\d[\d.]*)$/.exec(token);
-      add(m ? { name: m[1]!, version: m[2]! } : { name: token, version: null });
+      const entry: ConventionEntry = m
+        ? { name: m[1]!, version: m[2]! }
+        : { name: token, version: null };
+      // Only CF has a known versioned doc URL; other tokens (ACDD, UGRID, …)
+      // are left unlinked here (a registry entry can still supply a spec_url).
+      if (entry.name === "CF") entry.specUrl = cfSpecUrl(entry.version);
+      add(entry);
     }
   }
 
@@ -66,7 +84,12 @@ export function detectConventions(
       if (!isObject(entry)) continue;
       const name = entry["name"];
       if (typeof name !== "string" || !name) continue;
-      add({ name, version: registryVersion(entry) });
+      const specUrl = entry["spec_url"];
+      add({
+        name,
+        version: registryVersion(entry),
+        ...(typeof specUrl === "string" && specUrl ? { specUrl } : {}),
+      });
     }
   }
 
@@ -85,7 +108,12 @@ export function detectConventions(
         version: typeof first["version"] === "string" ? first["version"] : null,
       });
     } else if (isObject(first) && Array.isArray(first["datasets"])) {
-      add({ name: "multiscales", version: null, legacy: LEGACY_MULTISCALES_NOTE });
+      add({
+        name: "multiscales",
+        version: null,
+        specUrl: MULTISCALES_REPO_URL,
+        legacy: LEGACY_MULTISCALES_NOTE,
+      });
     }
   }
 

@@ -1,27 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { detectConventions, fetchCodecSummary } from "../zarr/structure";
 
+const cf = (v: string) =>
+  `https://cfconventions.org/Data/cf-conventions/cf-conventions-${v}/cf-conventions.html`;
+const MULTISCALES_REPO = "https://github.com/zarr-conventions/multiscales";
+
 describe("detectConventions", () => {
   it("returns empty array for empty attrs", () => {
     expect(detectConventions({})).toEqual([]);
   });
 
-  it("parses a single CF convention", () => {
+  it("parses a single CF convention with a versioned spec link", () => {
     expect(detectConventions({ Conventions: "CF-1.8" })).toEqual([
-      { name: "CF", version: "1.8" },
+      { name: "CF", version: "1.8", specUrl: cf("1.8") },
     ]);
   });
 
-  it("parses multiple space-separated conventions", () => {
+  it("links a version-less CF convention to the landing page", () => {
+    expect(detectConventions({ Conventions: "CF" })).toEqual([
+      { name: "CF", version: null, specUrl: "https://cfconventions.org/" },
+    ]);
+  });
+
+  it("parses multiple space-separated conventions (only CF linked)", () => {
     expect(detectConventions({ Conventions: "CF-1.8 ACDD-1.3" })).toEqual([
-      { name: "CF", version: "1.8" },
+      { name: "CF", version: "1.8", specUrl: cf("1.8") },
       { name: "ACDD", version: "1.3" },
     ]);
   });
 
   it("parses comma-separated conventions", () => {
     expect(detectConventions({ Conventions: "CF-1.9,UGRID-1.0" })).toEqual([
-      { name: "CF", version: "1.9" },
+      { name: "CF", version: "1.9", specUrl: cf("1.9") },
       { name: "UGRID", version: "1.0" },
     ]);
   });
@@ -65,7 +75,7 @@ describe("detectConventions", () => {
       "spatial:dimensions": ["x", "y"],
     };
     expect(detectConventions(attrs)).toEqual([
-      { name: "CF", version: "1.8" },
+      { name: "CF", version: "1.8", specUrl: cf("1.8") },
       { name: "OME-Zarr", version: "0.4" },
       { name: "GeoZarr", version: null },
     ]);
@@ -91,12 +101,17 @@ describe("detectConventions", () => {
       ],
     };
     expect(detectConventions(attrs)).toEqual([
-      { name: "CF", version: "1.10" },
-      { name: "multiscales", version: null, legacy: expect.any(String) },
+      { name: "CF", version: "1.10", specUrl: cf("1.10") },
+      {
+        name: "multiscales",
+        version: null,
+        specUrl: MULTISCALES_REPO,
+        legacy: expect.any(String),
+      },
     ]);
   });
 
-  it("detects conventions from the zarr_conventions registry, version from schema_url tag", () => {
+  it("detects conventions from the zarr_conventions registry, with version + spec_url", () => {
     const attrs = {
       zarr_conventions: [
         {
@@ -104,6 +119,8 @@ describe("detectConventions", () => {
           uuid: "d35379db-88df-4056-af3a-620245f8e347",
           schema_url:
             "https://raw.githubusercontent.com/zarr-conventions/multiscales/refs/tags/v0.1/schema.json",
+          spec_url:
+            "https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md",
         },
         {
           name: "proj",
@@ -112,9 +129,15 @@ describe("detectConventions", () => {
         },
       ],
     };
-    // Registry entries are canonical — no `legacy` flag.
+    // Registry entries are canonical — no `legacy` flag. specUrl comes from the
+    // entry's own spec_url when present.
     expect(detectConventions(attrs)).toEqual([
-      { name: "multiscales", version: "0.1" },
+      {
+        name: "multiscales",
+        version: "0.1",
+        specUrl:
+          "https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md",
+      },
       { name: "proj", version: "0.2" },
     ]);
   });

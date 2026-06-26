@@ -252,18 +252,28 @@ function StoreSection({
                 rowGap: 2,
               }}
             >
-              {conventions.map((c, i) => (
-                <span
-                  key={c.name}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
-                >
-                  <span>
-                    {c.version ? `${c.name}-${c.version}` : c.name}
-                    {i < conventions.length - 1 ? "," : ""}
+              {conventions.map((c, i) => {
+                const label = c.version ? `${c.name}-${c.version}` : c.name;
+                const comma = i < conventions.length - 1 ? "," : "";
+                return (
+                  <span
+                    key={c.name}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
+                  >
+                    <span>
+                      {c.specUrl ? (
+                        <a href={c.specUrl} target="_blank" rel="noreferrer">
+                          {label}
+                        </a>
+                      ) : (
+                        label
+                      )}
+                      {comma}
+                    </span>
+                    {c.legacy && <WarningIcon text={c.legacy} />}
                   </span>
-                  {c.legacy && <WarningIcon text={c.legacy} />}
-                </span>
-              ))}
+                );
+              })}
             </span>
           </KV>
         )}
