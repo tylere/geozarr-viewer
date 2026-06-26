@@ -166,7 +166,9 @@ export const EXAMPLES: Example[] = [
     params: {
       lng: "-62",
       lat: "-4",
-      zoom: "6",
+      // The coarsest (64x) overview gates tile loading at z9 (deriveMinZoom);
+      // a shallower default lands below that floor and renders blank.
+      zoom: "9",
       colormap: "viridis",
       rescale: "0,30",
     },
