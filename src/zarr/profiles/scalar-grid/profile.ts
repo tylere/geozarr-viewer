@@ -15,8 +15,9 @@ import {
 import { KEEP_MIN_ZOOM_EXTENT } from "../../../render/keep-min-zoom-tiles";
 import { createLogger } from "../../../log";
 import { bytesPerElement, spatialTileSize } from "../../chunk-size";
-import { asConsolidated, openV3Group } from "../../load-zarr";
+import { asConsolidated, openV3Group, type OpenedStore } from "../../load-zarr";
 import { MultiscaleStoreError, parseMultiscaleDatasets } from "../../multiscale";
+import { OmeZarrStoreError, isOmeZarrAttrs } from "../image-orthographic/ome";
 
 const log = createLogger("profile");
 import type { ZarrProfile } from "../../profile";
@@ -541,7 +542,32 @@ export const scalarGridProfile: ZarrProfile<ScalarGridState, ScalarGridContext> 
 
   async prepare(url, signal) {
     const done = log.time("scalar-grid prepare", "info");
-    const opened = await openV3Group(url, { consolidated: true });
+    let opened: OpenedStore;
+    try {
+      opened = await openV3Group(url, { consolidated: true });
+    } catch (openErr) {
+      // v3 open failed. OME-Zarr v0.4 (Zarr v2) has no root zarr.json, so this
+      // is where v0.4 bioimaging lands. Retry a metadata-only auto-version open
+      // just to read root attrs; if OME markers are present, redirect.
+      // Otherwise rethrow the original v3 error (don't mask genuine failures).
+      // This extra open runs ONLY after the v3 open already failed — the
+      // geographic v3 fast path pays nothing.
+      try {
+        const probe = await openV3Group(url, {
+          consolidated: false,
+          version: "auto",
+        });
+        if (isOmeZarrAttrs(probe.group.attrs)) throw new OmeZarrStoreError();
+      } catch (probeErr) {
+        if (probeErr instanceof OmeZarrStoreError) throw probeErr;
+        // auto-open also failed (genuinely broken / not zarr) — fall through.
+      }
+      throw openErr;
+    }
+    // OME-Zarr image store → image-orthographic. MUST precede the multiscale
+    // check: OME v0.4 roots carry `multiscales` with `datasets` AND `axes`,
+    // which parseMultiscaleDatasets would otherwise mis-route to multiscale-grid.
+    if (isOmeZarrAttrs(opened.group.attrs)) throw new OmeZarrStoreError();
     // A multiscale pyramid needs the multiscale-grid profile; signal the
     // chassis to switch (cheaper than probing the store up front on every load).
     if (parseMultiscaleDatasets(opened.group.attrs)) throw new MultiscaleStoreError();
