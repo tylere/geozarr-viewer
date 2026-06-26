@@ -12,7 +12,7 @@ import type {
   ViewerState,
   ViewerStateUpdate,
 } from "../state/types";
-import { InfoIcon } from "./Tooltip";
+import { InfoIcon, WarningIcon } from "./Tooltip";
 import { dimTint } from "../zarr/dim-colors";
 
 /** Top-level keys we render with their canonical labels under GeoZarr.
@@ -238,16 +238,47 @@ function StoreSection({
             <YesNoPill value={consolidated} />
           </KV>
         )}
-        {conventions.length > 0 && (
-          <KV
-            label="Conventions"
-            info="Zarr conventions declared in the store's root group attributes. CF (Climate and Forecast) conventions are signaled via a 'Conventions' attribute; OME-Zarr is identified by a 'multiscales' attribute; GeoZarr by 'spatial:*' or 'proj:code' attributes."
-          >
-            {conventions
-              .map((c) => (c.version ? `${c.name}-${c.version}` : c.name))
-              .join(", ")}
-          </KV>
-        )}
+        <KV
+          label="Conventions"
+          info="Zarr conventions explicitly declared by the store's root group: the 'zarr_conventions' registry attribute, CF/ACDD/UGRID tokens in the 'Conventions' attribute, and OME-Zarr (a 'multiscales' attribute with an 'axes' field). Names link to their canonical specification when one is known; a warning icon marks a convention inferred from a legacy signal rather than the registry."
+        >
+          {conventions.length > 0 ? (
+            <span
+              style={{
+                display: "inline-flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                columnGap: 6,
+                rowGap: 2,
+              }}
+            >
+              {conventions.map((c, i) => {
+                const label = c.version ? `${c.name}-${c.version}` : c.name;
+                const comma = i < conventions.length - 1 ? "," : "";
+                return (
+                  <span
+                    key={c.name}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
+                  >
+                    <span>
+                      {c.specUrl ? (
+                        <a href={c.specUrl} target="_blank" rel="noreferrer">
+                          {label}
+                        </a>
+                      ) : (
+                        label
+                      )}
+                      {comma}
+                    </span>
+                    {c.legacy && <WarningIcon text={c.legacy} />}
+                  </span>
+                );
+              })}
+            </span>
+          ) : (
+            "(none listed)"
+          )}
+        </KV>
       </dl>
     </div>
   );

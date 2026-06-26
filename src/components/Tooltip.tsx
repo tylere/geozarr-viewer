@@ -153,3 +153,44 @@ export function InfoIcon({ text }: { text: string }) {
     </Tooltip>
   );
 }
+
+/** Amber warning triangle wrapped in a {@link Tooltip}. Use to flag a value
+ * that works but isn't current best practice (e.g. a legacy convention). */
+export function WarningIcon({ text }: { text: string }) {
+  return (
+    <Tooltip text={text}>
+      <svg
+        role="img"
+        aria-label={text}
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        style={{
+          flex: "0 0 auto",
+          cursor: "help",
+          color: "#d9a300",
+        }}
+      >
+        <path
+          d="M6 1 L11.2 10.5 L0.8 10.5 Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinejoin="round"
+        />
+        <text
+          x="6"
+          y="7.4"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="6.5"
+          fontWeight="700"
+          fontFamily="var(--font-sans)"
+          fill="currentColor"
+        >
+          !
+        </text>
+      </svg>
+    </Tooltip>
+  );
+}

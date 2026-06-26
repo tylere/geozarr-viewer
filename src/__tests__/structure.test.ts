@@ -1,69 +1,179 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { detectConventions, fetchCodecSummary } from "../zarr/structure";
 
+const cf = (v: string) =>
+  `https://cfconventions.org/Data/cf-conventions/cf-conventions-${v}/cf-conventions.html`;
+const ome = (v: string) => `https://ngff.openmicroscopy.org/${v}/`;
+const OME_LATEST = "https://ngff.openmicroscopy.org/latest/";
+const MULTISCALES_REPO = "https://github.com/zarr-conventions/multiscales";
+const PROJ_REPO = "https://github.com/zarr-conventions/proj";
+const SPATIAL_REPO = "https://github.com/zarr-conventions/spatial";
+const GEOEMB_REPO = "https://github.com/geo-embeddings/embeddings-zarr-convention";
+const GEOZARR_SPEC = "https://github.com/zarr-developers/geozarr-spec";
+const ACDD = "https://wiki.esipfed.org/Attribute_Convention_for_Data_Discovery_1-3";
+const UGRID = "http://ugrid-conventions.github.io/ugrid-conventions/";
+
 describe("detectConventions", () => {
   it("returns empty array for empty attrs", () => {
     expect(detectConventions({})).toEqual([]);
   });
 
-  it("parses a single CF convention", () => {
+  it("parses a single CF convention with a versioned spec link", () => {
     expect(detectConventions({ Conventions: "CF-1.8" })).toEqual([
-      { name: "CF", version: "1.8" },
+      { name: "CF", version: "1.8", specUrl: cf("1.8") },
     ]);
   });
 
-  it("parses multiple space-separated conventions", () => {
+  it("links a version-less CF convention to the landing page", () => {
+    expect(detectConventions({ Conventions: "CF" })).toEqual([
+      { name: "CF", version: null, specUrl: "https://cfconventions.org/" },
+    ]);
+  });
+
+  it("links every known token (CF + ACDD) from a space-separated list", () => {
     expect(detectConventions({ Conventions: "CF-1.8 ACDD-1.3" })).toEqual([
-      { name: "CF", version: "1.8" },
-      { name: "ACDD", version: "1.3" },
+      { name: "CF", version: "1.8", specUrl: cf("1.8") },
+      { name: "ACDD", version: "1.3", specUrl: ACDD },
     ]);
   });
 
-  it("parses comma-separated conventions", () => {
+  it("parses comma-separated conventions (UGRID linked from the table)", () => {
     expect(detectConventions({ Conventions: "CF-1.9,UGRID-1.0" })).toEqual([
-      { name: "CF", version: "1.9" },
-      { name: "UGRID", version: "1.0" },
+      { name: "CF", version: "1.9", specUrl: cf("1.9") },
+      { name: "UGRID", version: "1.0", specUrl: UGRID },
     ]);
   });
 
-  it("handles convention token without version", () => {
+  it("leaves an unknown convention token unlinked", () => {
     expect(detectConventions({ Conventions: "MyConvention" })).toEqual([
       { name: "MyConvention", version: null },
     ]);
   });
 
-  it("detects OME-Zarr from multiscales attr with version", () => {
-    expect(
-      detectConventions({ multiscales: [{ version: "0.5" }] }),
-    ).toEqual([{ name: "OME-Zarr", version: "0.5" }]);
-  });
-
-  it("detects OME-Zarr without version when version is missing", () => {
-    expect(detectConventions({ multiscales: [{}] })).toEqual([
-      { name: "OME-Zarr", version: null },
+  it("links an explicitly-declared GeoZarr token", () => {
+    expect(detectConventions({ Conventions: "GeoZarr" })).toEqual([
+      { name: "GeoZarr", version: null, specUrl: GEOZARR_SPEC },
     ]);
   });
 
-  it("detects GeoZarr from spatial: attr key", () => {
-    const result = detectConventions({ "spatial:dimensions": ["x", "y"] });
-    expect(result).toEqual([{ name: "GeoZarr", version: null }]);
+  it("detects OME-Zarr from a multiscales attr with `axes` and version (versioned link)", () => {
+    expect(
+      detectConventions({
+        multiscales: [
+          { version: "0.5", axes: [{ name: "y", type: "space" }] },
+        ],
+      }),
+    ).toEqual([{ name: "OME-Zarr", version: "0.5", specUrl: ome("0.5") }]);
   });
 
-  it("detects GeoZarr from proj:code attr key", () => {
-    const result = detectConventions({ "proj:code": "EPSG:4326" });
-    expect(result).toEqual([{ name: "GeoZarr", version: null }]);
+  it("detects OME-Zarr (null version) from `axes`, linking the latest spec", () => {
+    expect(
+      detectConventions({ multiscales: [{ axes: [{ name: "y" }] }] }),
+    ).toEqual([{ name: "OME-Zarr", version: null, specUrl: OME_LATEST }]);
   });
 
-  it("combines all three sources", () => {
+  it("no longer infers GeoZarr from spatial:/proj: attribute keys", () => {
+    expect(
+      detectConventions({
+        "spatial:dimensions": ["x", "y"],
+        "proj:code": "EPSG:4326",
+      }),
+    ).toEqual([]);
+  });
+
+  it("combines explicit sources: Conventions + registry + OME-Zarr multiscales", () => {
     const attrs = {
       Conventions: "CF-1.8",
-      multiscales: [{ version: "0.4" }],
-      "spatial:dimensions": ["x", "y"],
+      zarr_conventions: [{ name: "proj:" }],
+      multiscales: [{ version: "0.4", axes: [{ name: "y", type: "space" }] }],
     };
     expect(detectConventions(attrs)).toEqual([
-      { name: "CF", version: "1.8" },
-      { name: "OME-Zarr", version: "0.4" },
-      { name: "GeoZarr", version: null },
+      { name: "CF", version: "1.8", specUrl: cf("1.8") },
+      { name: "proj:", version: null, specUrl: PROJ_REPO },
+      { name: "OME-Zarr", version: "0.4", specUrl: ome("0.4") },
+    ]);
+  });
+
+  it("labels a CF/rioxarray multiscale pyramid as legacy `multiscales` (linked AND warned), not OME-Zarr", () => {
+    // Meta CHM v2 shape: the `multiscales` key is reused by the legacy
+    // multiscale-pyramid layout (datasets[].downscale_factor + a top-level
+    // `type`), which has no OME-Zarr `axes` and predates the `zarr_conventions`
+    // registry. It must be reported as `multiscales` (linked via the table AND
+    // flagged legacy), NOT OME-Zarr.
+    const attrs = {
+      Conventions: "CF-1.10",
+      multiscales: [
+        {
+          name: "chm",
+          datasets: [
+            { path: "64x", downscale_factor: 64 },
+            { path: "1x", downscale_factor: 1 },
+          ],
+          type: "average",
+        },
+      ],
+    };
+    expect(detectConventions(attrs)).toEqual([
+      { name: "CF", version: "1.10", specUrl: cf("1.10") },
+      {
+        name: "multiscales",
+        version: null,
+        specUrl: MULTISCALES_REPO,
+        legacy: expect.any(String),
+      },
+    ]);
+  });
+
+  it("links registry conventions via the curated table, not the declared spec_url", () => {
+    const attrs = {
+      zarr_conventions: [
+        {
+          name: "multiscales",
+          version: "0.1",
+          uuid: "d35379db-88df-4056-af3a-620245f8e347",
+          // A dead spec_url must be ignored — links come from the curated table.
+          spec_url:
+            "https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md",
+        },
+        {
+          // No explicit `version` — the `v0.2` tag in schema_url must be ignored.
+          name: "proj",
+          schema_url:
+            "https://raw.githubusercontent.com/zarr-conventions/proj/refs/tags/v0.2/schema.json",
+        },
+      ],
+    };
+    expect(detectConventions(attrs)).toEqual([
+      { name: "multiscales", version: "0.1", specUrl: MULTISCALES_REPO },
+      { name: "proj", version: null, specUrl: PROJ_REPO },
+    ]);
+  });
+
+  it("links colon-suffixed registry names via name normalization", () => {
+    // AEF's registry shape: proj:/spatial:/geoemb: with trailing colons.
+    const attrs = {
+      zarr_conventions: [
+        { name: "proj:" },
+        { name: "spatial:" },
+        { name: "geoemb:" },
+      ],
+    };
+    // Display name keeps the colon; only the table lookup is normalized.
+    expect(detectConventions(attrs)).toEqual([
+      { name: "proj:", version: null, specUrl: PROJ_REPO },
+      { name: "spatial:", version: null, specUrl: SPATIAL_REPO },
+      { name: "geoemb:", version: null, specUrl: GEOEMB_REPO },
+    ]);
+  });
+
+  it("prefers the registry `multiscales` over a legacy array (deduped, not flagged legacy)", () => {
+    const attrs = {
+      zarr_conventions: [{ name: "multiscales" }],
+      multiscales: [{ datasets: [{ path: "1x", downscale_factor: 1 }] }],
+    };
+    // Registry entry wins: linked via the table, no version, no legacy flag.
+    expect(detectConventions(attrs)).toEqual([
+      { name: "multiscales", version: null, specUrl: MULTISCALES_REPO },
     ]);
   });
 });
