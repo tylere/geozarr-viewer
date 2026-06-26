@@ -111,7 +111,7 @@ describe("detectConventions", () => {
     ]);
   });
 
-  it("detects registry conventions; version only from an explicit field, never the schema_url tag", () => {
+  it("detects registry conventions; explicit version only, and never links the declared spec_url", () => {
     const attrs = {
       zarr_conventions: [
         {
@@ -120,6 +120,7 @@ describe("detectConventions", () => {
           uuid: "d35379db-88df-4056-af3a-620245f8e347",
           schema_url:
             "https://raw.githubusercontent.com/zarr-conventions/multiscales/refs/tags/v0.1/schema.json",
+          // spec_url is intentionally NOT surfaced as a link (can be dead).
           spec_url:
             "https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md",
         },
@@ -131,15 +132,9 @@ describe("detectConventions", () => {
         },
       ],
     };
-    // Registry entries are canonical — no `legacy` flag. specUrl comes from the
-    // entry's own spec_url when present.
+    // Registry entries are canonical — no `legacy` flag, and no `specUrl`.
     expect(detectConventions(attrs)).toEqual([
-      {
-        name: "multiscales",
-        version: "0.1",
-        specUrl:
-          "https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md",
-      },
+      { name: "multiscales", version: "0.1" },
       { name: "proj", version: null },
     ]);
   });

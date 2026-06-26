@@ -76,20 +76,17 @@ export function detectConventions(
     }
   }
 
-  // Canonical registry: stores declare their conventions explicitly here, each
-  // with a `schema_url` whose `/tags/vX.Y/` segment carries the version.
+  // Canonical registry: stores declare their conventions explicitly here. We do
+  // NOT link their declared `spec_url` — real stores ship dead ones (FTW's
+  // `proj:` / `spatial:` both 404), and we can't validate at render time. The
+  // trust/validation question is tracked in issue #36.
   const registry = attrs["zarr_conventions"];
   if (Array.isArray(registry)) {
     for (const entry of registry) {
       if (!isObject(entry)) continue;
       const name = entry["name"];
       if (typeof name !== "string" || !name) continue;
-      const specUrl = entry["spec_url"];
-      add({
-        name,
-        version: registryVersion(entry),
-        ...(typeof specUrl === "string" && specUrl ? { specUrl } : {}),
-      });
+      add({ name, version: registryVersion(entry) });
     }
   }
 
