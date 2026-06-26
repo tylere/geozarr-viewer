@@ -229,7 +229,11 @@ a {
   right: 16px;
   width: 320px;
   max-height: calc(100vh - 32px);
-  overflow: auto;
+  overflow-y: auto;
+  /* Guardrail: long unbroken values (e.g. synthesized GeoZarr transform/bbox
+   * tuples) wrap via the .meta-kv rules below; this stops any stray token from
+   * reintroducing a horizontal scrollbar on the fixed-width panel. */
+  overflow-x: hidden;
   z-index: 5;
 }
 @media (max-width: 480px) {
@@ -283,6 +287,36 @@ a {
 
 .section {
   display: grid;
+  /* Allow the grid item to shrink below its content's intrinsic width so a long
+   * unbreakable token wraps instead of widening the fixed-width panel. */
+  min-width: 0;
+}
+
+/* Value cells in the Structure panel. These classes were previously unstyled,
+ * so long unbroken strings (high-precision GeoZarr transforms, attribute URLs,
+ * Icechunk snapshot messages) overflowed the 320px panel. min-width:0 lets the
+ * grid ancestors shrink; overflow-wrap breaks inside otherwise-unbreakable
+ * tokens (numbers/JSON/URLs) while still preferring word boundaries. */
+.meta-kv,
+.meta-kv-row {
+  min-width: 0;
+}
+
+.meta-kv-row > dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta-muted {
+  overflow-wrap: anywhere;
+}
+
+.meta-list {
+  min-width: 0;
+}
+
+.meta-list > li {
+  overflow-wrap: anywhere;
 }
 
 .section + .section {
@@ -364,6 +398,7 @@ details.section > div.section-body {
   display: grid;
   gap: 10px;
   margin-top: 8px;
+  min-width: 0;
 }
 
 /* Options-panel control groups: a captioned box whose left-border accent +
