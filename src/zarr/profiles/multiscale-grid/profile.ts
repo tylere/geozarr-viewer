@@ -4,6 +4,7 @@ import { ReportingZarrLayer } from "../../../render/reporting-zarr-layer";
 import { buildSingleBandRenderTile } from "../../../render/single-band-pipeline";
 import type { MultiBandTileData } from "../../../render/shared-textures";
 import { autoStatsFromGlobal, buildBandStats } from "../../../render/stats";
+import { readSampleValue } from "../../../render/sample-source";
 import { KEEP_MIN_ZOOM_EXTENT } from "../../../render/keep-min-zoom-tiles";
 import { bytesPerElement } from "../../chunk-size";
 import { buildGeoZarrMetadata, parseMultiscaleDatasets } from "../../multiscale";
@@ -218,7 +219,10 @@ export const multiscaleGridProfile: ZarrProfile<
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       metadata: ctx.metadata as any,
       selection: {},
-      getTileData: makeScalarGridTileLoader({ fillValue: null }),
+      getTileData: makeScalarGridTileLoader({
+        fillValue: null,
+        sampleKeyForZ: (z) => `${ctx.variable}:z${z}`,
+      }),
       renderTile,
       opacity: chassisState.opacity,
       // Stop fetching new tiles when zoomed out past the coarsest level's
@@ -281,6 +285,35 @@ export const multiscaleGridProfile: ZarrProfile<
     for (let i = 0; i < raw.length; i++) decoded[i] = Number(raw[i]);
     const stats = buildBandStats(decoded, null);
     return stats ? autoStatsFromGlobal(stats) : null;
+  },
+
+  sampleValue(ctx, _state, lng, lat) {
+    const layouts = ctx.metadata.multiscales.layout; // finest-first (layout[0] = finest)
+    const N = layouts.length;
+    const mx = mercX(lng);
+    const my = mercY(lat);
+    // deck.gl z=0 = coarsest (layout[N-1]), z=N-1 = finest (layout[0]).
+    // Try finest level first — it has the most detail. Fall back to coarser
+    // levels when a finer tile hasn't been loaded at the current hover point.
+    for (let z = N - 1; z >= 0; z--) {
+      const layoutIndex = N - 1 - z;
+      const layout = layouts[layoutIndex];
+      if (!layout) continue;
+      const t = layout["spatial:transform"]; // [scaleX, 0, originX, 0, scaleY, originY]
+      const shape = layout["spatial:shape"]; // [height, width]
+      const col = Math.floor((mx - t[2]) / t[0]);
+      const row = Math.floor((my - t[5]) / t[4]);
+      if (col < 0 || col >= shape[1] || row < 0 || row >= shape[0]) continue;
+      const value = readSampleValue(`${ctx.variable}:z${z}`, row, col, 0);
+      if (value !== null) {
+        return {
+          label: ctx.longName ?? ctx.variable,
+          value: Number.isNaN(value) ? null : value,
+          units: ctx.units,
+        };
+      }
+    }
+    return null;
   },
 
   pyramidLevelCount: (ctx) => ctx.levelCount,

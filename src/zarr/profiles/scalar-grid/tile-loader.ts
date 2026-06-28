@@ -32,6 +32,10 @@ export function makeScalarGridTileLoader(opts: {
   /** When set, register each decoded tile under this key so the hover tooltip
    * can read values from it (see render/sample-source). */
   sampleKey?: string;
+  /** When set, derive the sample key from the tile's deck.gl `z` (pyramid level).
+   * Takes precedence over `sampleKey`. Use this for multiscale stores where each
+   * level has its own array coordinate space. */
+  sampleKeyForZ?: (z: number) => string;
 }) {
   const scale = opts.scaleFactor ?? 1;
   const offset = opts.addOffset ?? 0;
@@ -105,7 +109,8 @@ export function makeScalarGridTileLoader(opts: {
       }
       float32 = rolled;
     }
-    if (opts.sampleKey) {
+    const sampleKey = opts.sampleKeyForZ ? opts.sampleKeyForZ(options.z) : opts.sampleKey;
+    if (sampleKey) {
       // `float32` is already CF-decoded and (when applicable) rolled to the
       // -180..180 frame, so the value reads directly — no roll in `valueAt`.
       const nd = sliceSpec.length;
@@ -113,7 +118,7 @@ export function makeScalarGridTileLoader(opts: {
       const colStart = (sliceSpec[nd - 1] as zarr.Slice)?.start ?? 0;
       const buf = float32;
       registerSampleTile(
-        opts.sampleKey,
+        sampleKey,
         options.x,
         options.y,
         options.z,
